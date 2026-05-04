@@ -1,0 +1,5 @@
+streamlit
+requests
+pytz
+matplotlib
+timezonefinder
