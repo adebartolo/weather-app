@@ -221,7 +221,16 @@ with st.sidebar:
     with col_d:
         target_date = st.date_input("Date", value=datetime.date.today() + datetime.timedelta(days=1))
     with col_t:
-        target_time = st.time_input("Time", value=datetime.time(13, 0))
+        time_options = [
+            (datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M")).strftime("%-I:%M %p")
+            for h in range(24)
+            for m in [0, 30]  # every 30 min (change to [0,15,30,45] if needed)
+        ]
+    
+        selected_time_str = st.selectbox("Time", time_options, index=26)  # ~1:00 PM default
+    
+        # Convert back to datetime.time object for your logic
+        target_time = datetime.datetime.strptime(selected_time_str, "%I:%M %p").time()
 
     units = st.radio("Temperature Units", ["°F", "°C"], horizontal=True)
     
