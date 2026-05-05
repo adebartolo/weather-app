@@ -67,18 +67,14 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (NOW INCLUDES STATE) ─────────────────────────────────────────────
+# ── GEOCODE (STATE + US FIX INCLUDED) ────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     r = requests.get(
         url,
-        params={
-            "name": location_name,
-            "count": 10,
-            "language": "en"
-        },
+        params={"name": location_name, "count": 10, "language": "en"},
         timeout=8
     )
 
@@ -91,7 +87,6 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
-    # prefer US results first
     us_match = next(
         (r for r in results if r.get("country") == "United States"),
         None
@@ -100,22 +95,17 @@ def geocode(location_name):
     p = us_match if us_match else results[0]
 
     country = p.get("country") or "United States"
-    state = p.get("admin1")  # 🌟 STATE / REGION
+    state = p.get("admin1")
 
-    # clean formatting
     parts = [p["name"]]
-
     if state:
         parts.append(state)
-
     parts.append(country)
-
-    full_name = ", ".join(parts)
 
     return {
         "lat": p["latitude"],
         "lon": p["longitude"],
-        "name": full_name,
+        "name": ", ".join(parts),
     }
 
 # ── WEATHER ──────────────────────────────────────────────────────────────────
@@ -166,7 +156,7 @@ with st.sidebar:
 
     if st.button("⚡ Use NOW (ET)"):
         st.session_state.date = now_et.date()
-        st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
+        st.session_state.time = now_et.replace(minute=0).time()
         st.rerun()
 
     date = st.date_input("Date (ET)", key="date")
@@ -190,7 +180,7 @@ with st.sidebar:
 
     go = st.button("Get Outfit")
 
-# ── AUTO RUN ON LOAD ─────────────────────────────────────────────────────────
+# ── AUTO RUN ─────────────────────────────────────────────────────────────────
 if st.session_state.auto_run:
     st.session_state.auto_run = False
     go = True
@@ -201,7 +191,6 @@ st.title("Weather · Outfit Advisor (ET Standardized)")
 if not go:
     st.stop()
 
-# ── LOCATION ────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
 if "error" in geo:
@@ -210,7 +199,6 @@ if "error" in geo:
 
 lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
 
-# ── WEATHER ─────────────────────────────────────────────────────────────────
 data = fetch_weather(lat, lon)
 
 if "error" in data:
@@ -228,7 +216,6 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── MATCH USER TIME ─────────────────────────────────────────────────────────
 target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
 idx = min(
@@ -248,7 +235,7 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART ─────────────────────────────────────────────────────────────
+# ── 7-DAY CHART (WITH LEGEND) ───────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -266,19 +253,23 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o")
-    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--")
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min Temp")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max Temp")
+    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
     ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
+    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35, label="Rain %")
 
     ax1.set_title(f"7-Day Forecast — {city_name}")
+
+    ax1.legend(loc="upper left")
+    ax2.legend(loc="upper right")
+
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24 HOUR CHART ───────────────────────────────────────────────────────────
+# ── 24-HOUR CHART (WITH LEGEND) ─────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours (Always ET)")
 
@@ -299,14 +290,18 @@ if show_24h:
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-    ax3.plot(ft, ftmp, color=ACCENT2)
-    ax3.plot(ft, fw, color=ACCENT3, linestyle="--")
+    ax3.plot(ft, ftmp, color=ACCENT2, label="Temp")
+    ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind")
     ax3.fill_between(ft, ftmp, alpha=0.1, color=ACCENT2)
 
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.4)
+    ax4.bar(ft, fp, color=ACCENT1, alpha=0.4, label="Rain %")
 
     ax3.set_title(f"Next 24 Hours — {city_name} (ET)")
+
+    ax3.legend(loc="upper left")
+    ax4.legend(loc="upper right")
+
     st.pyplot(fig2)
     plt.close(fig2)
 
