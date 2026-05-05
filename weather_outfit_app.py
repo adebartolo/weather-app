@@ -14,10 +14,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
+# ── CSS (your original) ────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400&display=swap');
 
 html, body, [class*="css"] {
     font-family: 'DM Sans', sans-serif;
@@ -32,80 +32,63 @@ h1, h2, h3 {
     color: #e8e8f0;
 }
 
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.04) !important;
+.stTextInput input, .stSelectbox, .stDateInput, .stTimeInput {
+    background: rgba(255,255,255,0.06) !important;
+    color: #fff !important;
 }
 
-/* Inputs */
-.stTextInput input, .stSelectbox, .stDateInput input, .stTimeInput input {
-    background: rgba(255,255,255,0.08) !important;
-    color: white !important;
-}
-
-/* Buttons */
 .stButton > button {
     background: linear-gradient(135deg, #667eea, #764ba2) !important;
     color: white !important;
     border-radius: 10px !important;
     width: 100%;
 }
-
-/* Metric cards */
-.metric-card {
-    background: rgba(255,255,255,0.06);
-    padding: 1rem;
-    border-radius: 12px;
-    text-align: center;
-}
-.metric-card .value {
-    font-size: 1.6rem;
-    font-weight: 700;
-}
-
-/* Outfit */
-.outfit-banner {
-    padding: 1.2rem;
-    border-radius: 16px;
-    background: rgba(102,126,234,0.2);
-    margin-bottom: 1rem;
-}
-.outfit-banner .title {
-    font-size: 1.2rem;
-    font-weight: 800;
-}
 </style>
 """, unsafe_allow_html=True)
 
-# ── Matplotlib theme ───────────────────────────────────────────────────────────
+# ── Matplotlib theme ──────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
-    "text.color": "#e8e8f0",
+    "axes.edgecolor": "#333355",
     "axes.labelcolor": "#aaaacc",
-    "xtick.color": "#aaaacc",
-    "ytick.color": "#aaaacc",
+    "text.color": "#e8e8f0",
+    "xtick.color": "#888899",
+    "ytick.color": "#888899",
+    "grid.color": "#2a2a4a",
 })
 
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
-CHART_SIZE = (13, 4)
+CHART_SIZE = (13, 3.8)
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── GEOCODE (FIXED + FAIL SAFE) ────────────────────────────────────────────────
+# ── FIXED GEOCODER ────────────────────────────────────────────────────────────
+GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
+
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     try:
+        if not location_name:
+            return None
+
         r = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": location_name, "format": "json", "limit": 1},
-            headers={"User-Agent": "weather-app"},
+            GEOCODE_URL,
+            params={
+                "q": location_name,
+                "format": "json",
+                "limit": 1
+            },
+            headers={"User-Agent": "weather-app/1.0"},
             timeout=8
         )
-        data = r.json()
 
+        if r.status_code != 200:
+            return "RATE_LIMIT"
+
+        data = r.json()
         if not data:
             return None
 
@@ -115,136 +98,165 @@ def geocode(location_name):
 
         return lat, lon, name, "UTC"
 
-    except:
-        return None
+    except Exception:
+        return "ERROR"
 
-# ── WEATHER API (FIXED ERROR HANDLING) ─────────────────────────────────────────
+
+# ── Weather API ───────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def fetch_weather(lat, lon):
-    try:
-        url = (
-            f"https://api.open-meteo.com/v1/forecast"
-            f"?latitude={lat}&longitude={lon}"
-            f"&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
-            f"&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
-            f"&timezone=auto"
-        )
-        r = requests.get(url, timeout=8)
+def fetch_weather(lat, lon, tz):
+    url = (
+        f"https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}"
+        f"&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
+        f"&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
+        f"&timezone={tz}"
+    )
 
-        if r.status_code != 200:
-            return "LIMITED"
+    r = requests.get(url, timeout=10)
 
-        return r.json()
+    if r.status_code != 200:
+        return None, "API_ERROR"
 
-    except:
-        return "LIMITED"
+    return r.json(), None
 
-# ── Outfit logic ───────────────────────────────────────────────────────────────
-def outfit_for(temp_f, rain, wind):
+
+# ── Outfit logic ──────────────────────────────────────────────────────────────
+def outfit_for(temp_f, precip, wind):
     if temp_f < 40:
-        return "🧥", "Heavy Coat", "Very cold — bundle up."
-    if temp_f < 55:
+        return "🧥", "Heavy Jacket", "Very cold — bundle up."
+    if temp_f < 60:
         return "🧥", "Light Jacket", "Cool weather."
-    if rain > 60:
+    if precip > 60:
         return "☂️", "Rain Gear", "Bring umbrella."
     if wind > 20:
-        return "💨", "Windy Outfit", "Layer lightly."
+        return "💨", "Wind Layer", "Windy conditions."
     return "👕", "T-Shirt Weather", "Comfortable day."
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+
+# ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🌤️ Outfit Planner")
+    st.title("🌤️ Outfit App")
 
     location = st.text_input("Location", "New York City")
 
-    date = st.date_input("Date", datetime.date.today())
-    time = st.time_input("Time", datetime.datetime.now().time())
+    date = st.date_input(
+        "Date",
+        value=datetime.date.today() + datetime.timedelta(days=1)
+    )
+
+    time = st.time_input("Time", datetime.time(13, 0))
 
     units = st.radio("Units", ["°F", "°C"])
 
-    run = st.button("Get Outfit")
+    go = st.button("Get Outfit")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 st.title("Weather Outfit Advisor")
 
-if not run:
+if not go:
     st.stop()
 
+# ── GEOCODE ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
+if geo == "RATE_LIMIT":
+    st.error("⚠️ Location service rate-limited. Try again in a few seconds.")
+    st.stop()
+
+if geo == "ERROR":
+    st.error("⚠️ Location API error.")
+    st.stop()
+
 if not geo:
-    st.error("Could not find location. Try 'New York, USA'")
+    st.error("Could not find location. Try 'New York, USA'.")
     st.stop()
 
-lat, lon, name, tz = geo
+lat, lon, city, tz = geo
 
-weather = fetch_weather(lat, lon)
+# ── WEATHER ────────────────────────────────────────────────────────────────────
+data, err = fetch_weather(lat, lon, tz)
 
-if weather == "LIMITED":
-    st.error("API call limited or failed. Try again later.")
+if err == "API_ERROR":
+    st.error("⚠️ Weather API limited or unavailable.")
     st.stop()
 
-# ── Parse ──────────────────────────────────────────────────────────────────────
-hourly = weather["hourly"]
-times = hourly["time"]
+if not data:
+    st.error("Weather fetch failed.")
+    st.stop()
 
-temps = [to_f(t) for t in hourly["temperature_2m"]]
-rain = hourly["precipitation_probability"]
-wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-idx = 0
+# ── Parse ─────────────────────────────────────────────────────────────────────
+hourly = data["hourly"]
 
-temp = temps[idx]
-rain_v = rain[idx]
-wind_v = wind[idx]
+times = [
+    datetime.datetime.fromisoformat(t)
+    for t in hourly["time"]
+]
 
-emoji, outfit, desc = outfit_for(temp, rain_v, wind_v)
+temps = hourly["temperature_2m"]
+prec = hourly["precipitation_probability"]
+wind = hourly["wind_speed_10m"]
 
-# ── Output ─────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<div class="outfit-banner">
-<div class="title">{emoji} {outfit}</div>
-<p>{desc}</p>
-</div>
-""", unsafe_allow_html=True)
+# pick closest time
+target_dt = datetime.datetime.combine(date, time)
 
-col1, col2, col3 = st.columns(3)
-col1.metric("Location", name)
-col2.metric("Temp", f"{temp}°F")
-col3.metric("Rain", f"{rain_v}%")
+idx = min(
+    range(len(times)),
+    key=lambda i: abs((times[i] - target_dt).total_seconds())
+)
 
-# ── 7 DAY CHART ────────────────────────────────────────────────────────────────
-daily = weather["daily"]
+temp_f = to_f(temps[idx])
+precip = prec[idx]
+wind_mph = to_mph(wind[idx])
 
-days = daily["time"]
-tmin = [to_f(x) for x in daily["temperature_2m_min"]]
-tmax = [to_f(x) for x in daily["temperature_2m_max"]]
-rain_d = daily["precipitation_probability_max"]
+emoji, outfit, desc = outfit_for(temp_f, precip, wind_mph)
+
+# ── OUTPUT ─────────────────────────────────────────────────────────────────────
+st.subheader(f"{emoji} {outfit}")
+st.write(desc)
+
+st.metric("Location", city)
+st.metric("Temp", f"{temp_f}°F")
+st.metric("Rain", f"{precip}%")
+st.metric("Wind", f"{wind_mph} mph")
+
+
+# ── CHARTS (FIXED + CLEAN) ────────────────────────────────────────────────────
+st.subheader("Hourly Forecast")
 
 fig, ax = plt.subplots(figsize=CHART_SIZE)
 
-ax.fill_between(days, tmin, tmax, alpha=0.2, color=ACCENT1)
-ax.plot(days, tmin, marker="o", label="Min")
-ax.plot(days, tmax, marker="o", label="Max")
+ax.plot(temps[:24], color=ACCENT2, label="Temp")
+ax.plot(wind[:24], color=ACCENT3, label="Wind")
 
 ax2 = ax.twinx()
-ax2.bar(days, rain_d, alpha=0.2, color=ACCENT2)
+ax2.bar(range(24), prec[:24], alpha=0.2, color=ACCENT1, label="Rain")
 
-ax.set_title("7 Day Forecast")
-ax.legend()
+ax.set_title("Next 24 Hours")
+ax.legend(loc="upper left")
 
 st.pyplot(fig)
+plt.close(fig)
 
-# ── 24 HOUR CHART ──────────────────────────────────────────────────────────────
+
+# ── DAILY ──────────────────────────────────────────────────────────────────────
+st.subheader("7-Day Forecast")
+
+daily = data["daily"]
+
+days = daily["time"]
+tmin = daily["temperature_2m_min"]
+tmax = daily["temperature_2m_max"]
+
 fig2, ax = plt.subplots(figsize=CHART_SIZE)
 
-ax.plot(temps[:24], label="Temp", color=ACCENT2)
-ax.plot(wind[:24], label="Wind", color=ACCENT3)
+ax.plot(tmin, marker="o", color=ACCENT1)
+ax.plot(tmax, marker="o", color=ACCENT2)
 
-ax2 = ax.twinx()
-ax2.bar(range(24), rain[:24], alpha=0.2, color=ACCENT1)
-
-ax.set_title("24 Hour Forecast")
-ax.legend()
+ax.set_xticks(range(len(days)))
+ax.set_xticklabels(days, rotation=45)
 
 st.pyplot(fig2)
+plt.close(fig2)
