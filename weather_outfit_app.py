@@ -48,7 +48,7 @@ CHART_SIZE = (13, 4)
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── Geocode (fixed + stable API) ───────────────────────────────────────────────
+# ── Geocode ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -115,19 +115,33 @@ with st.sidebar:
 
     location = st.text_input("Location", "New York City")
 
-    date = st.date_input("Date", datetime.date.today() + datetime.timedelta(days=1))
+    use_now = st.button("⚡ Use NOW (current time)")
+
+    date = st.date_input(
+        "Date",
+        datetime.date.today() + datetime.timedelta(days=1),
+        disabled=use_now
+    )
 
     times = [
         datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M").strftime("%-I:%M %p")
         for h in range(24) for m in [0, 30]
     ]
-    time_str = st.selectbox("Time", times, index=26)
-    time_obj = datetime.datetime.strptime(time_str, "%I:%M %p").time()
+
+    time_str = st.selectbox(
+        "Time",
+        times,
+        index=26,
+        disabled=use_now
+    )
+
+    time_obj = datetime.datetime.now().time() if use_now else datetime.datetime.strptime(time_str, "%I:%M %p").time()
 
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart", True)
+    show_24h = st.checkbox("24-Hour Chart (Current Time Based)", True)
+
     forecast_hrs = st.slider("Hours", 6, 48, 24)
 
     go = st.button("Get Outfit")
@@ -161,8 +175,11 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── Match time ────────────────────────────────────────────────────────────────
-target = datetime.datetime.combine(date, time_obj)
+# ── TARGET TIME LOGIC (NOW FIXED) ──────────────────────────────────────────────
+if use_now:
+    target = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
+else:
+    target = datetime.datetime.combine(date, time_obj)
 
 idx = min(
     range(len(times)),
@@ -181,7 +198,7 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART (FIXED + LEGEND INCLUDED) ──────────────────────────────────────
+# ── 7-DAY CHART ───────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -196,75 +213,66 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    l1 = ax1.plot(days, d_tmin, color=ACCENT1, marker="o", linewidth=2, label=f"Min ({units})")
-    l2 = ax1.plot(days, d_tmax, color=ACCENT2, marker="o", linewidth=2, label=f"Max ({units})")
-    l3 = ax1.plot(days, d_wind, color=ACCENT3, marker="x", linestyle="--", label="Wind (mph)")
-
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label=f"Min ({units})")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label=f"Max ({units})")
+    ax1.plot(days, d_wind, color=ACCENT3, marker="x", linestyle="--", label="Wind (mph)")
     ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
 
     ax1.set_ylabel("Temp / Wind")
     ax1.grid(True, alpha=0.4)
 
     ax2 = ax1.twinx()
-    bars = ax2.bar(days, d_prec, color=ACCENT1, alpha=0.25, label="Rain %")
+    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.25, label="Rain %")
     ax2.set_ylim(0, 130)
     ax2.set_ylabel("Precipitation %")
 
-    # ── FIXED LEGEND (includes rain) ──
     rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
-    ax1.legend(handles=[l1[0], l2[0], l3[0], rain_patch],
-               loc="upper center",
-               bbox_to_anchor=(0.5, -0.15),
-               ncol=4)
+
+    ax1.legend(handles=[
+        ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch
+    ], loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=4)
 
     plt.title(f"7-Day Forecast — {city_name}")
     plt.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (LEGEND INCLUDED) ────────────────────────────────────
+# ── 24-HOUR CHART (NOW-BASED) ────────────────────────────────────────────────
 if show_24h:
-    st.markdown(f"### Next {forecast_hrs} Hours")
+    st.markdown("### Next Hours (Based on CURRENT TIME)")
 
     now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
 
-    ft, ft_temp, fp, fw = [], [], [], []
+    ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
         if t >= now and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
-            ft_temp.append(temps[i])   # ✅ FIXED alignment
             fp.append(prec[i])
             fw.append(wind[i])
+            ftmp.append(temps[i])
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-    t_line = ax3.plot(ft, ft_temp, color=ACCENT2, label=f"Temp ({units})")
-    w_line = ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind (mph)")
-
-    ax3.fill_between(ft, ft_temp, alpha=0.1, color=ACCENT2)
+    ax3.plot(ft, ftmp, color=ACCENT2, label=f"Temp ({units})")
+    ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind (mph)")
+    ax3.fill_between(ft, ftmp, alpha=0.1, color=ACCENT2)
 
     ax3.set_ylabel("Temp / Wind")
     ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
-
-    bars = ax4.bar(ft, fp, color=ACCENT1, alpha=0.25, label="Rain %")
-
-    ax4.set_ylim(0, max(100, max(fp) + 10))  # ✅ auto-scale so rain is visible
+    ax4.bar(ft, fp, color=ACCENT1, alpha=0.25, label="Rain %")
+    ax4.set_ylim(0, 130)
     ax4.set_ylabel("Precipitation %")
 
-    # ── LEGEND (always includes rain) ──
     rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
 
-    ax3.legend(
-        handles=[t_line[0], w_line[0], rain_patch2],
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.2),
-        ncol=3
-    )
+    ax3.legend(handles=[
+        ax3.lines[0], ax3.lines[1], rain_patch2
+    ], loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3)
 
-    plt.title(f"Next {forecast_hrs} Hours — {city_name}")
+    plt.title(f"Next {forecast_hrs} Hours — {city_name} (CURRENT TIME BASED)")
     plt.tight_layout()
     st.pyplot(fig2)
     plt.close(fig2)
