@@ -1,9 +1,13 @@
 import streamlit as st
 import requests
 import datetime
+import pytz
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
+
+# ── TIMEZONE (GLOBAL STANDARD) ────────────────────────────────────────────────
+ET = pytz.timezone("US/Eastern")
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -25,6 +29,9 @@ html, body, [class*="css"] {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ── NOTE (ET STANDARD) ────────────────────────────────────────────────────────
+st.info("🕒 All times in this app are shown in **Eastern Time (ET)**.")
 
 # ── Matplotlib theme ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
@@ -48,7 +55,7 @@ CHART_SIZE = (13, 4)
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── Geocode ────────────────────────────────────────────────────────────────────
+# ── GEOCODE ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -75,7 +82,7 @@ def geocode(location_name):
         "tz": "UTC"
     }
 
-# ── Weather ────────────────────────────────────────────────────────────────────
+# ── WEATHER ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon, tz):
     url = (
@@ -91,7 +98,7 @@ def fetch_weather(lat, lon, tz):
 
     return r.json()
 
-# ── Outfit logic ───────────────────────────────────────────────────────────────
+# ── OUTFIT LOGIC ───────────────────────────────────────────────────────────────
 def outfit_for(temp_f, precip, wind):
     if temp_f < 32:
         return "🧥", "Heavy Coat", "Freezing cold"
@@ -105,27 +112,25 @@ def outfit_for(temp_f, precip, wind):
         return "👕", "T-Shirt Weather", "Mild day"
     return "😎", "Summer Vibes", "Hot and sunny"
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+# ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
     location = st.text_input("Location", "New York City")
 
-    # ── NOW BUTTON STATE ──
-    now_pressed = st.button("⚡ Use NOW (current time)")
+    # ── NOW BUTTON ──
+    now_pressed = st.button("⚡ Use NOW (ET)")
 
-    now_dt = datetime.datetime.now()
+    now_et = datetime.datetime.now(ET)
+    default_date = now_et.date()
+    default_time = now_et.replace(minute=0, second=0, microsecond=0).time()
 
-    default_date = now_dt.date()
-    default_time = (now_dt.replace(minute=0, second=0, microsecond=0)).time()
-
-    # ── AUTO SYNC INPUTS ──
     if now_pressed:
         st.session_state["date"] = default_date
         st.session_state["time"] = default_time
 
     date = st.date_input(
-        "Date",
+        "Date (ET)",
         value=st.session_state.get("date", datetime.date.today() + datetime.timedelta(days=1))
     )
 
@@ -135,7 +140,7 @@ with st.sidebar:
     ]
 
     time_obj = st.selectbox(
-        "Time",
+        "Time (ET)",
         times,
         index=0,
         format_func=lambda t: t.strftime("%-I:%M %p"),
@@ -145,19 +150,19 @@ with st.sidebar:
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME)", True)
+    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME ET)", True)
 
     forecast_hrs = st.slider("Hours", 6, 48, 24)
 
     go = st.button("Get Outfit")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
-st.title("Weather · Outfit Advisor")
+# ── MAIN ───────────────────────────────────────────────────────────────────────
+st.title("Weather · Outfit Advisor (ET Standardized)")
 
 if not go:
     st.stop()
 
-# ── Location ───────────────────────────────────────────────────────────────────
+# ── LOCATION ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
 if "error" in geo:
@@ -166,7 +171,7 @@ if "error" in geo:
 
 lat, lon, city_name, tz = geo["lat"], geo["lon"], geo["name"], geo["tz"]
 
-# ── Weather ────────────────────────────────────────────────────────────────────
+# ── WEATHER ────────────────────────────────────────────────────────────────────
 data = fetch_weather(lat, lon, tz)
 
 if "error" in data:
@@ -202,7 +207,7 @@ st.metric("Wind", f"{wd} mph")
 
 # ── 7-DAY CHART ───────────────────────────────────────────────────────────────
 if show_7day:
-    st.markdown("### 7-Day Forecast")
+    st.markdown("### 7-Day Forecast (ET Context)")
 
     daily = data["daily"]
     d_dates = daily["time"]
@@ -225,10 +230,10 @@ if show_7day:
 
     ax2 = ax1.twinx()
     ax2.bar(days, d_prec, color=ACCENT1, alpha=0.25)
-    ax2.set_ylim(0, 130)
-    ax2.set_ylabel("Precipitation %")
+    ax2.set_ylabel("Rain %")
 
     rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
+
     ax1.legend(handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch],
                loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=4)
 
@@ -238,7 +243,7 @@ if show_7day:
 
 # ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next Hours (CURRENT TIME FORECAST)")
+    st.markdown("### Next Hours (CURRENT TIME ET FORECAST)")
 
     now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
 
@@ -262,7 +267,6 @@ if show_24h:
 
     ax4 = ax3.twinx()
     ax4.bar(ft, fp, color=ACCENT1, alpha=0.25)
-    ax4.set_ylim(0, 130)
     ax4.set_ylabel("Rain %")
 
     rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
