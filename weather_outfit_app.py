@@ -38,8 +38,6 @@ matplotlib.rcParams.update({
     "ytick.color": "#888899",
     "grid.color": "#2a2a4a",
     "grid.linewidth": 0.7,
-    "font.family": "DejaVu Sans",
-    "font.size": 9,
 })
 
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
@@ -115,7 +113,6 @@ with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
     location = st.text_input("Location", "New York City")
-
     date = st.date_input("Date", datetime.date.today() + datetime.timedelta(days=1))
 
     times = [
@@ -126,14 +123,13 @@ with st.sidebar:
     time_obj = datetime.datetime.strptime(time_str, "%I:%M %p").time()
 
     units = st.radio("Units", ["°F", "°C"])
-
-    show_7 = st.checkbox("7-Day Chart", True)
-    show_24 = st.checkbox("24-Hour Chart", True)
-    hours = st.slider("Hours", 6, 48, 24)
+    show_7day = st.checkbox("7-Day Chart", True)
+    show_24h = st.checkbox("24-Hour Chart", True)
+    forecast_hrs = st.slider("Hours", 6, 48, 24)
 
     go = st.button("Get Outfit")
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── MAIN ───────────────────────────────────────────────────────────────────────
 st.title("Weather · Outfit Advisor")
 
 if not go:
@@ -143,10 +139,7 @@ if not go:
 geo = geocode(location)
 
 if "error" in geo:
-    if geo["error"] == "API_LIMITED":
-        st.error("❌ Location API limited. Try again shortly.")
-    else:
-        st.error("❌ Location not found.")
+    st.error("❌ Location API issue or not found.")
     st.stop()
 
 lat, lon, city, tz = geo["lat"], geo["lon"], geo["name"], geo["tz"]
@@ -155,7 +148,7 @@ lat, lon, city, tz = geo["lat"], geo["lon"], geo["name"], geo["tz"]
 data = fetch_weather(lat, lon, tz)
 
 if "error" in data:
-    st.error("❌ Weather API limited. Try again later.")
+    st.error("❌ Weather API limited.")
     st.stop()
 
 hourly = data["hourly"]
@@ -185,88 +178,64 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-Day chart ────────────────────────────────────────────────────────────────
+# ── 7-DAY CHART (FIXED) ───────────────────────────────────────────────────────
 if show_7day:
-    st.markdown('<div class="section-title">7-Day Forecast</div>', unsafe_allow_html=True)
+    st.subheader("7-Day Forecast")
+
     daily = data["daily"]
-    d_dates = daily["time"]
-    d_tmin  = [to_f(t) for t in daily["temperature_2m_min"]]
-    d_tmax  = [to_f(t) for t in daily["temperature_2m_max"]]
-    d_prec  = daily["precipitation_probability_max"]
-    d_wind  = [to_mph(w) for w in daily["wind_speed_10m_max"]]
 
-    if units == "°C":
-        d_tmin = [round((v - 32)*5/9, 1) for v in d_tmin]
-        d_tmax = [round((v - 32)*5/9, 1) for v in d_tmax]
+    d_tmin = [to_f(v) for v in daily["temperature_2m_min"]]
+    d_tmax = [to_f(v) for v in daily["temperature_2m_max"]]
+    d_prec = daily["precipitation_probability_max"]
+    d_wind = [to_mph(v) for v in daily["wind_speed_10m_max"]]
 
-    days = [datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d") for d in d_dates]
+    days = daily["time"]
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
+
     ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", linewidth=2, label=f"Min ({units})")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", linewidth=2, label=f"Max ({units})")
-    ax1.plot(days, d_wind, color=ACCENT3, marker="x", linestyle="--", linewidth=1.5, label="Wind (mph)")
-    ax1.set_ylabel(f"Temp ({units}) / Wind (mph)", color="#aaaacc")
-    ax1.grid(True, alpha=0.4)
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max")
+    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
+
+    ax1.set_xticks(range(len(days)))
+    ax1.set_xticklabels(days, rotation=45)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.22, label="Rain %", zorder=0)
-    ax2.set_ylim(0, 130)
-    ax2.set_ylabel("Precipitation (%)", color="#aaaacc")
-    ax2.tick_params(colors="#888899")
+    ax2.bar(range(len(days)), d_prec, alpha=0.2, color=ACCENT1)
 
-    lines, labels = ax1.get_legend_handles_labels()
-    bar_patch = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
-    ax1.legend(handles=lines + [bar_patch], loc="upper center",
-               bbox_to_anchor=(0.5, -0.18), ncol=4,
-               facecolor="#1a1a2e", edgecolor="#333355")
-
-    plt.title(f"7-Day Forecast — {city_name}", pad=12)
-    plt.tight_layout()
+    ax1.legend()
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-Hour chart ──────────────────────────────────────────────────────────────
+# ── 24-HOUR CHART (FIXED) ─────────────────────────────────────────────────────
 if show_24h:
-    st.markdown(f'<div class="section-title">Next {forecast_hrs}-Hour Forecast</div>', unsafe_allow_html=True)
+    st.subheader(f"Next {forecast_hrs} Hours")
 
     now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
-    filt_t, filt_tmp, filt_pr, filt_wd = [], [], [], []
+
+    f_t, f_temp, f_prec, f_wind = [], [], [], []
+
     for i, t in enumerate(times):
-        if t >= now and len(filt_t) < forecast_hrs:
-            filt_t.append(t.strftime("%-I %p"))
-            tmp = temps_f[i] if units == "°F" else temps_c[i]
-            filt_tmp.append(tmp)
-            filt_pr.append(precips[i])
-            filt_wd.append(winds[i])
+        if t >= now and len(f_t) < forecast_hrs:
+            f_t.append(t.strftime("%-I %p"))
+            f_temp.append(temps[i])
+            f_prec.append(prec[i])
+            f_wind.append(wind[i])
 
-    fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
-    ax3.fill_between(filt_t, filt_tmp, alpha=0.1, color=ACCENT2)
-    ax3.plot(filt_t, filt_tmp, color=ACCENT2, marker="o", markersize=4, linewidth=2, label=f"Temp ({units})")
-    ax3.plot(filt_t, filt_wd,  color=ACCENT3, marker="x", linestyle="--", linewidth=1.5, label="Wind (mph)")
-    ax3.set_ylabel(f"Temp ({units}) / Wind (mph)", color="#aaaacc")
-    ax3.grid(True, alpha=0.4)
+    fig2, ax = plt.subplots(figsize=CHART_SIZE)
 
-    # x-tick thinning
-    step = max(1, len(filt_t) // 12)
-    ax3.set_xticks(range(0, len(filt_t), step))
-    ax3.set_xticklabels(filt_t[::step], rotation=30, ha="right")
+    ax.plot(f_t, f_temp, color=ACCENT2, marker="o")
+    ax.plot(f_t, f_wind, color=ACCENT3, linestyle="--")
 
-    ax4 = ax3.twinx()
-    ax4.bar(filt_t, filt_pr, color=ACCENT1, alpha=0.22, label="Rain %", zorder=0)
-    ax4.set_ylim(0, 130)
-    ax4.set_ylabel("Precipitation (%)", color="#aaaacc")
-    ax4.tick_params(colors="#888899")
+    ax2 = ax.twinx()
+    ax2.bar(f_t, f_prec, alpha=0.2, color=ACCENT1)
 
-    lines3, labels3 = ax3.get_legend_handles_labels()
-    bar_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
-    ax3.legend(handles=lines3 + [bar_patch2], loc="upper center",
-               bbox_to_anchor=(0.5, -0.22), ncol=3,
-               facecolor="#1a1a2e", edgecolor="#333355")
+    step = max(1, len(f_t)//10)
+    ax.set_xticks(range(0, len(f_t), step))
+    ax.set_xticklabels(f_t[::step], rotation=30)
 
-    plt.title(f"Next {forecast_hrs}h Forecast — {city_name}", pad=12)
-    plt.tight_layout()
     st.pyplot(fig2)
     plt.close(fig2)
 
-st.success("Request was successful!")
+st.success("Loaded successfully")
