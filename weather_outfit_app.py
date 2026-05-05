@@ -30,8 +30,8 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ── NOTE (ET STANDARD) ────────────────────────────────────────────────────────
-st.info("🕒 All times in this app are shown in **Eastern Time (ET)**.")
+# ── TIME NOTE ──────────────────────────────────────────────────────────────────
+st.info("🕒 All times in this app are standardized to **Eastern Time (ET)**. Charts always show forecast data relative to ET.")
 
 # ── Matplotlib theme ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
@@ -118,20 +118,17 @@ with st.sidebar:
 
     location = st.text_input("Location", "New York City")
 
-    # ── NOW BUTTON ──
     now_pressed = st.button("⚡ Use NOW (ET)")
 
     now_et = datetime.datetime.now(ET)
-    default_date = now_et.date()
-    default_time = now_et.replace(minute=0, second=0, microsecond=0).time()
 
     if now_pressed:
-        st.session_state["date"] = default_date
-        st.session_state["time"] = default_time
+        st.session_state["date"] = now_et.date()
+        st.session_state["time"] = now_et.replace(minute=0, second=0, microsecond=0).time()
 
     date = st.date_input(
         "Date (ET)",
-        value=st.session_state.get("date", datetime.date.today() + datetime.timedelta(days=1))
+        value=st.session_state.get("date", now_et.date())
     )
 
     times = [
@@ -142,7 +139,6 @@ with st.sidebar:
     time_obj = st.selectbox(
         "Time (ET)",
         times,
-        index=0,
         format_func=lambda t: t.strftime("%-I:%M %p"),
         key="time"
     )
@@ -150,9 +146,16 @@ with st.sidebar:
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME ET)", True)
+    show_24h = st.checkbox("24-Hour Chart (FIXED WINDOW)", True)
 
-    forecast_hrs = st.slider("Hours", 6, 48, 24)
+    # HARD CAP 24 HOURS
+    forecast_hrs = st.slider(
+        "Hours (max 24)",
+        6,
+        24,
+        24,
+        help="This only controls display length, not weather accuracy"
+    )
 
     go = st.button("Get Outfit")
 
@@ -161,6 +164,8 @@ st.title("Weather · Outfit Advisor (ET Standardized)")
 
 if not go:
     st.stop()
+
+st.caption("📌 Note: Charts show fixed forecast windows. User inputs only affect outfit selection time.")
 
 # ── LOCATION ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
@@ -229,13 +234,15 @@ if show_7day:
     ax1.grid(True, alpha=0.4)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.25)
-    ax2.set_ylabel("Rain %")
+    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
+    ax2.set_ylabel("Rain % (higher = more likely precipitation)")
 
-    rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
+    rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
 
     ax1.legend(handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch],
-               loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=4)
+               loc="upper center",
+               bbox_to_anchor=(0.5, -0.15),
+               ncol=4)
 
     plt.title(f"7-Day Forecast — {city_name}")
     st.pyplot(fig)
@@ -243,25 +250,18 @@ if show_7day:
 
 # ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next Hours")
+    st.markdown("### Next 24 Hours Forecast (ET, fixed window)")
 
-    # anchor to USER selected time (NOT system now)
     start_time = datetime.datetime.combine(date, time_obj)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        # start from selected time instead of current time
         if t >= start_time and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
-
-    # safety fallback (if selection is near end of dataset)
-    if len(ft) == 0:
-        st.warning("No forecast data available for selected time window.")
-        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -273,10 +273,10 @@ if show_24h:
     ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.25)
-    ax4.set_ylabel("Rain %")
+    ax4.bar(ft, fp, color=ACCENT1, alpha=0.35)
+    ax4.set_ylabel("Rain % (probability of precipitation)")
 
-    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
+    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
 
     ax3.legend(
         handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
@@ -285,7 +285,7 @@ if show_24h:
         ncol=3
     )
 
-    plt.title(f"Next {forecast_hrs} Hours from {time_obj.strftime('%-I %p')} (ET)")
+    plt.title(f"Next 24 Hours — {city_name}")
     st.pyplot(fig2)
     plt.close(fig2)
 
