@@ -8,7 +8,6 @@ import matplotlib.patches as mpatches
 
 # ── TIMEZONE ────────────────────────────────────────────────────────────────
 ET = pytz.timezone("America/New_York")
-UTC = pytz.utc
 
 # ── PAGE ─────────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -17,7 +16,7 @@ st.set_page_config(
     layout="wide",
 )
 
-st.info("🕒 All times are standardized to Eastern Time (ET).")
+st.info("🕒 All times are shown in Eastern Time (ET).")
 
 # ── STYLE ─────────────────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
@@ -29,8 +28,6 @@ matplotlib.rcParams.update({
     "xtick.color": "#888899",
     "ytick.color": "#888899",
     "grid.color": "#2a2a4a",
-    "grid.linewidth": 0.7,
-    "font.size": 9,
 })
 
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
@@ -40,7 +37,7 @@ CHART_SIZE = (13, 4)
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── SESSION DEFAULTS ─────────────────────────────────────────────────────────
+# ── SESSION STATE ────────────────────────────────────────────────────────────
 now_et = datetime.datetime.now(ET)
 
 if "date" not in st.session_state:
@@ -57,6 +54,7 @@ def geocode(location):
         params={"name": location, "count": 1},
         timeout=8
     )
+
     data = r.json()
     if "results" not in data:
         return {"error": "NOT_FOUND"}
@@ -69,7 +67,7 @@ def geocode(location):
         "name": f'{p["name"]}, {p.get("country","")}',
     }
 
-# ── WEATHER (IMPORTANT FIX: force ET timezone output) ───────────────────────
+# ── WEATHER (KEEP ET OUTPUT FROM API) ────────────────────────────────────────
 @st.cache_data
 def fetch_weather(lat, lon):
     url = (
@@ -82,7 +80,7 @@ def fetch_weather(lat, lon):
 
     return requests.get(url).json()
 
-# ── OUTFIT ───────────────────────────────────────────────────────────────────
+# ── OUTFIT LOGIC ─────────────────────────────────────────────────────────────
 def outfit(temp_f, precip, wind):
     if temp_f < 32:
         return "🥶", "Heavy Coat"
@@ -91,7 +89,7 @@ def outfit(temp_f, precip, wind):
     if temp_f < 60:
         return "🧥", "Light Jacket"
     if precip > 60:
-        return "☂️", "Umbrella"
+        return "☂️", "Umbrella Needed"
     if wind > 20:
         return "💨", "Windbreaker"
     if temp_f < 80:
@@ -102,6 +100,7 @@ def outfit(temp_f, precip, wind):
 with st.sidebar:
     location = st.text_input("Location", "New York City")
 
+    # NOW FIX (updates BOTH properly)
     if st.button("⚡ Use NOW (ET)"):
         st.session_state.date = now_et.date()
         st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
@@ -109,10 +108,7 @@ with st.sidebar:
 
     date = st.date_input("Date (ET)", key="date")
 
-    times = [
-        datetime.time(h, m)
-        for h in range(24) for m in [0, 30]
-    ]
+    times = [datetime.time(h, m) for h in range(24) for m in [0, 30]]
 
     time_obj = st.selectbox(
         "Time (ET)",
@@ -138,9 +134,9 @@ data = fetch_weather(geo["lat"], geo["lon"])
 
 hourly = data["hourly"]
 
-# ── FIX: parse as UTC then convert to ET ─────────────────────────────────────
-raw_times = [
-    datetime.datetime.fromisoformat(t).replace(tzinfo=UTC).astimezone(ET)
+# ── CRITICAL FIX #1: convert ALL times to ET safely ─────────────────────────
+times = [
+    datetime.datetime.fromisoformat(t).replace(tzinfo=pytz.utc).astimezone(ET)
     for t in hourly["time"]
 ]
 
@@ -148,12 +144,12 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── FIX MATCHING ─────────────────────────────────────────────────────────────
+# ── FIX #2: correct matching logic ───────────────────────────────────────────
 target = ET.localize(datetime.datetime.combine(date, time_obj))
 
 idx = min(
-    range(len(raw_times)),
-    key=lambda i: abs((raw_times[i] - target).total_seconds())
+    range(len(times)),
+    key=lambda i: abs((times[i] - target).total_seconds())
 )
 
 tf, pr, wd = temps[idx], prec[idx], wind[idx]
@@ -161,37 +157,73 @@ tf, pr, wd = temps[idx], prec[idx], wind[idx]
 emoji, title = outfit(tf, pr, wd)
 
 st.subheader(f"{emoji} {title}")
-
 st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 24H ALWAYS FROM NOW (FIXED TYPE ERROR) ───────────────────────────────────
-st.markdown("### Next 24 Hours (ET)")
+# ── 7 DAY (UNCHANGED FUNCTIONALITY) ─────────────────────────────────────────
+st.markdown("### 7-Day Forecast")
 
-now = now_et  # already ET-aware
+daily = data["daily"]
+
+d_tmin = [to_f(x) for x in daily["temperature_2m_min"]]
+d_tmax = [to_f(x) for x in daily["temperature_2m_max"]]
+d_prec = daily["precipitation_probability_max"]
+d_wind = [to_mph(x) for x in daily["wind_speed_10m_max"]]
+
+days = [
+    datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
+    for d in daily["time"]
+]
+
+fig, ax1 = plt.subplots(figsize=CHART_SIZE)
+
+ax1.plot(days, d_tmin, color=ACCENT1, label="Min")
+ax1.plot(days, d_tmax, color=ACCENT2, label="Max")
+ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
+ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
+
+ax2 = ax1.twinx()
+ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
+ax2.set_ylabel("Rain %")
+
+rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
+
+ax1.legend(handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch])
+
+st.pyplot(fig)
+plt.close(fig)
+
+# ── 24 HOUR (FIXED TYPE ERROR + CORRECT ALIGNMENT) ───────────────────────────
+st.markdown("### Next 24 Hours (ET, fixed)")
+
+now = now_et
 
 ft, fp, fw, ftmp = [], [], [], []
 
-for i, t in enumerate(raw_times):
+for i, t in enumerate(times):
+    # FIX: both are ET-aware → safe comparison
     if t >= now and len(ft) < forecast_hrs:
         ft.append(t.strftime("%-I %p"))
         fp.append(prec[i])
         fw.append(wind[i])
         ftmp.append(temps[i])
 
-fig, ax1 = plt.subplots(figsize=CHART_SIZE)
+fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-ax1.plot(ft, ftmp, color=ACCENT2, label="Temp")
-ax1.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind")
-ax1.fill_between(ft, ftmp, alpha=0.1, color=ACCENT2)
+ax3.plot(ft, ftmp, color=ACCENT2, label="Temp")
+ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind")
+ax3.fill_between(ft, ftmp, alpha=0.1, color=ACCENT2)
 
-ax2 = ax1.twinx()
+ax2 = ax3.twinx()
 ax2.bar(ft, fp, color=ACCENT1, alpha=0.4)
 ax2.set_ylabel("Rain %")
 
-ax1.legend()
-plt.title(f"Next 24 Hours — {geo['name']} (ET)")
-st.pyplot(fig)
+rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
+
+ax3.legend(handles=[ax3.lines[0], ax3.lines[1], rain_patch2])
+
+st.pyplot(fig2)
+plt.close(fig2)
 
 st.success("Done ✔")
