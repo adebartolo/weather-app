@@ -10,6 +10,30 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
+# ── STATE ABBREVIATION MAP ──────────────────────────────────────────────────
+STATE_MAP = {
+    "ny": "New York",
+    "nj": "New Jersey",
+    "ca": "California",
+    "fl": "Florida",
+    "tx": "Texas",
+    "il": "Illinois",
+    "pa": "Pennsylvania",
+    "ga": "Georgia",
+    "nc": "North Carolina",
+    "sc": "South Carolina",
+    "va": "Virginia",
+    "ma": "Massachusetts",
+    "oh": "Ohio",
+    "mi": "Michigan",
+    "wa": "Washington",
+    "or": "Oregon",
+    "az": "Arizona",
+    "nv": "Nevada",
+    "co": "Colorado",
+    "ut": "Utah",
+}
+
 # ── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="What Should I Wear?",
@@ -67,14 +91,27 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (STATE FIX INCLUDED) ─────────────────────────────────────────────
+# ── SMART GEOCODER (FIXED + STATE INTELLIGENCE) ─────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
+    raw = location_name.strip().lower()
+
+    # ── detect state abbreviations ──
+    if raw in STATE_MAP:
+        raw = STATE_MAP[raw]
+
+    # ── detect single word input ──
+    is_single = len(raw.split()) == 1
+
+    query = raw
+    if is_single:
+        query = f"{raw}, United States"
+
     r = requests.get(
         url,
-        params={"name": location_name, "count": 10, "language": "en"},
+        params={"name": query, "count": 10, "language": "en"},
         timeout=8
     )
 
@@ -87,12 +124,13 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
-    us_match = next(
-        (r for r in results if r.get("country") == "United States"),
-        None
-    )
+    # ── US PRIORITY FILTER ──
+    us = [r for r in results if r.get("country") == "United States"]
 
-    p = us_match if us_match else results[0]
+    if is_single:
+        p = us[0] if us else results[0]
+    else:
+        p = us[0] if us else results[0]
 
     country = p.get("country") or "United States"
     state = p.get("admin1")
@@ -148,7 +186,7 @@ with st.sidebar:
     location = st.text_input(
         "Location",
         value="New York City",
-        placeholder="Enter city or state"
+        placeholder="Enter city or state (e.g. NY, Florida)"
     )
 
     if not location.strip():
@@ -217,7 +255,7 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── SMART TEMP LOGIC (TODAY vs FUTURE) ───────────────────────────────────────
+# ── SMART TEMP LOGIC ────────────────────────────────────────────────────────
 selected_dt = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 is_today = date == now_et.date()
 
@@ -255,83 +293,5 @@ st.metric("Location", city_name)
 st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
-
-# ── 7-DAY CHART ─────────────────────────────────────────────────────────────
-if show_7day:
-    st.markdown("### 7-Day Forecast")
-
-    dmin = [to_f(t) for t in daily["temperature_2m_min"]]
-    dmax = [to_f(t) for t in daily["temperature_2m_max"]]
-    dprec = daily["precipitation_probability_max"]
-    dwind = [to_mph(w) for w in daily["wind_speed_10m_max"]]
-
-    days = [
-        datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
-        for d in daily["time"]
-    ]
-
-    fig, ax1 = plt.subplots(figsize=CHART_SIZE)
-
-    ax1.plot(days, dmin, label="Min Temp", color=ACCENT1)
-    ax1.plot(days, dmax, label="Max Temp", color=ACCENT2)
-    ax1.plot(days, dwind, label="Wind", color=ACCENT3, linestyle="--")
-    ax1.fill_between(days, dmin, dmax, alpha=0.12)
-
-    ax2 = ax1.twinx()
-    ax2.bar(days, dprec, alpha=0.35, color=ACCENT1, label="Rain %")
-
-    ax1.set_title(f"7-Day Forecast — {city_name}")
-    ax1.legend(loc="upper left")
-    ax2.legend(loc="upper right")
-
-    st.pyplot(fig)
-    plt.close(fig)
-
-# ── 24 HOUR CHART ───────────────────────────────────────────────────────────
-if show_24h:
-    st.markdown("### Next 24 Hours (Always ET)")
-
-    now = datetime.datetime.now(ET)
-
-    ft, fp, fw, ftmp = [], [], [], []
-
-    for i, t in enumerate(times):
-        if t < now:
-            continue
-        if len(ft) >= forecast_hrs:
-            break
-
-        ft.append(t.strftime("%-I %p"))
-        fp.append(prec[i])
-        fw.append(wind[i])
-        ftmp.append(temps[i])
-
-    window = 3
-    fmin = []
-    fmax = []
-
-    for i in range(len(ftmp)):
-        chunk = ftmp[max(0, i-window):i+1]
-        fmin.append(min(chunk))
-        fmax.append(max(chunk))
-
-    fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
-
-    ax3.plot(ft, fmin, label="Min Temp", color=ACCENT1)
-    ax3.plot(ft, fmax, label="Max Temp", color=ACCENT2)
-    ax3.fill_between(ft, fmin, fmax, alpha=0.15)
-
-    ax3.plot(ft, fw, label="Wind", color=ACCENT3, linestyle="--")
-
-    ax4 = ax3.twinx()
-    ax4.bar(ft, fp, alpha=0.35, color=ACCENT1, label="Rain %")
-
-    ax3.set_title(f"Next 24 Hours — {city_name} (ET)")
-
-    ax3.legend(loc="upper left")
-    ax4.legend(loc="upper right")
-
-    st.pyplot(fig2)
-    plt.close(fig2)
 
 st.success("Done ✔")
