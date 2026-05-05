@@ -64,6 +64,9 @@ if "date" not in st.session_state:
 if "time" not in st.session_state:
     st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
 
+if "auto_run" not in st.session_state:
+    st.session_state.auto_run = True
+
 # ── GEOCODE ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
@@ -127,7 +130,12 @@ def outfit_for(temp_f, precip, wind):
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
-    location = st.text_input("Location", placeholder="Enter a city (e.g., New York City)")
+    # ✅ placeholder + default
+    location = st.text_input(
+        "Location",
+        value="New York City",
+        placeholder="Enter city or state"
+    )
 
     if not location.strip():
         location = "New York City"
@@ -158,6 +166,11 @@ with st.sidebar:
 
     go = st.button("Get Outfit")
 
+# ── AUTO RUN ON LOAD ─────────────────────────────────────────────────────────
+if st.session_state.auto_run:
+    st.session_state.auto_run = False
+    go = True
+
 # ── MAIN ─────────────────────────────────────────────────────────────────────
 st.title("Weather · Outfit Advisor (ET Standardized)")
 
@@ -182,7 +195,6 @@ if "error" in data:
 
 hourly = data["hourly"]
 
-# ✅ FIX: convert to ET-aware timestamps
 times = [
     datetime.datetime.fromisoformat(t).replace(tzinfo=UTC).astimezone(ET)
     for t in hourly["time"]
@@ -242,7 +254,7 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24 HOUR FIXED ───────────────────────────────────────────────────────────
+# ── 24 HOUR ─────────────────────────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours (Always ET)")
 
