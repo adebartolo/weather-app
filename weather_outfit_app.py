@@ -17,60 +17,113 @@ st.set_page_config(
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&display=swap');
 
-/* Font consistency */
 html, body, [class*="css"] {
-    font-family: Arial, Helvetica, sans-serif !important;
+    font-family: 'DM Sans', sans-serif;
 }
 
-/* Keep your dark gradient */
+h1, h2, h3, .stMarkdown h1 { font-family: 'Syne', sans-serif; }
+
+/* Background */
 .stApp {
     background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
-}
-
-/* Ensure readable default text */
-html, body, .stApp {
-    color: #e8e8f0 !important;
+    color: #e8e8f0;
 }
 
 /* Sidebar */
-[data-testid="stSidebar"] * {
-    color: #e8e8f0 !important;
+[data-testid="stSidebar"] {
+    background: rgba(255,255,255,0.04) !important;
+    border-right: 1px solid rgba(255,255,255,0.08);
 }
+[data-testid="stSidebar"] * { color: #e8e8f0 !important; }
 
-/* FIX: Inputs always visible */
-.stTextInput input,
-.stSelectbox select,
-.stDateInput input,
-.stTimeInput input {
-    background: rgba(255,255,255,0.08) !important;
-    color: #ffffff !important;
-    border: 1px solid rgba(255,255,255,0.25) !important;
-}
-
-/* Placeholder text */
-::placeholder {
-    color: rgba(255,255,255,0.6) !important;
+/* Inputs */
+.stTextInput input, .stSelectbox select, .stDateInput input, .stTimeInput input {
+    background: rgba(255,255,255,0.06) !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    border-radius: 8px !important;
+    color: #fff !important;
 }
 
 /* Buttons */
 .stButton > button {
-    font-family: Arial, Helvetica, sans-serif !important;
-    color: #ffffff !important;
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    padding: 0.6rem 1.4rem !important;
+    font-family: 'Syne', sans-serif !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.04em !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+    width: 100%;
+}
+.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(102,126,234,0.4) !important;
 }
 
-/* Prevent invisible text anywhere */
-.stMarkdown, p, span, div, label {
-    color: inherit !important;
+/* Metric cards */
+.metric-card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem;
+    text-align: center;
 }
-
-/* Metric cards safety */
-.metric-card .label,
-.metric-card .value,
+.metric-card .label {
+    font-size: 0.75rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+    margin-bottom: 0.3rem;
+}
+.metric-card .value {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+}
 .metric-card .unit {
-    color: #ffffff !important;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.5);
+    margin-top: 0.2rem;
 }
 
+/* Outfit banner */
+.outfit-banner {
+    background: linear-gradient(135deg, rgba(102,126,234,0.25), rgba(118,75,162,0.25));
+    border: 1px solid rgba(102,126,234,0.4);
+    border-radius: 16px;
+    padding: 1.4rem 2rem;
+    margin: 1rem 0;
+}
+.outfit-banner .emoji { font-size: 3rem; }
+.outfit-banner .title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin: 0.5rem 0 0.3rem;
+}
+.outfit-banner .desc { color: rgba(255,255,255,0.7); font-size: 0.95rem; }
+
+/* Section headings */
+.section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    margin: 1.5rem 0 0.8rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: 0.4rem;
+}
+
+/* Plot frames */
+.stPlotlyChart, [data-testid="stImage"] { border-radius: 12px; overflow: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
