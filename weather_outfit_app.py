@@ -236,6 +236,40 @@ st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
 # ── 7-DAY CHART (WITH LEGEND) ───────────────────────────────────────────────
+if show_7day:
+    st.markdown("### 7-Day Forecast")
+
+    daily = data["daily"]
+
+    d_tmin = [to_f(t) for t in daily["temperature_2m_min"]]
+    d_tmax = [to_f(t) for t in daily["temperature_2m_max"]]
+    d_prec = daily["precipitation_probability_max"]
+    d_wind = [to_mph(w) for w in daily["wind_speed_10m_max"]]
+
+    days = [
+        datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
+        for d in daily["time"]
+    ]
+
+    fig, ax1 = plt.subplots(figsize=CHART_SIZE)
+
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min Temp")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max Temp")
+    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
+    ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12)
+
+    ax2 = ax1.twinx()
+    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35, label="Rain %")
+
+    ax1.set_title(f"7-Day Forecast — {city_name}")
+
+    ax1.legend(loc="upper left")
+    ax2.legend(loc="upper right")
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+# ── 24-HOUR CHART (WITH LEGEND) ─────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours (Always ET)")
 
