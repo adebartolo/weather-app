@@ -67,7 +67,7 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (STATE + US FIX INCLUDED) ────────────────────────────────────────
+# ── GEOCODE (STATE FIX INCLUDED) ─────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -206,6 +206,7 @@ if "error" in data:
     st.stop()
 
 hourly = data["hourly"]
+daily = data["daily"]
 
 times = [
     datetime.datetime.fromisoformat(t).replace(tzinfo=UTC).astimezone(ET)
@@ -216,14 +217,34 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
+# ── SMART TEMP LOGIC (TODAY vs FUTURE) ───────────────────────────────────────
+selected_dt = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
+is_today = date == now_et.date()
 
-idx = min(
-    range(len(times)),
-    key=lambda i: abs((times[i] - target).total_seconds())
-)
+if is_today:
+    idx = min(
+        range(len(times)),
+        key=lambda i: abs((times[i] - selected_dt).total_seconds())
+    )
 
-tf, pr, wd = temps[idx], prec[idx], wind[idx]
+    tf = temps[idx]
+    pr = prec[idx]
+    wd = wind[idx]
+
+    temp_label = f"{tf}°F"
+
+else:
+    day_idx = (selected_dt.date() - now_et.date()).days
+    day_idx = max(0, min(day_idx, len(daily["temperature_2m_min"]) - 1))
+
+    tmin = to_f(daily["temperature_2m_min"][day_idx])
+    tmax = to_f(daily["temperature_2m_max"][day_idx])
+
+    pr = daily["precipitation_probability_max"][day_idx]
+    wd = to_mph(daily["wind_speed_10m_max"][day_idx])
+
+    tf = (tmin + tmax) / 2
+    temp_label = f"{tmin}°F – {tmax}°F"
 
 emoji, title, desc = outfit_for(tf, pr, wd)
 
@@ -231,20 +252,18 @@ st.subheader(f"{emoji} {title}")
 st.write(desc)
 
 st.metric("Location", city_name)
-st.metric("Temp", f"{tf}°F")
+st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART (WITH LEGEND) ───────────────────────────────────────────────
+# ── 7-DAY CHART ─────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
-    daily = data["daily"]
-
-    d_tmin = [to_f(t) for t in daily["temperature_2m_min"]]
-    d_tmax = [to_f(t) for t in daily["temperature_2m_max"]]
-    d_prec = daily["precipitation_probability_max"]
-    d_wind = [to_mph(w) for w in daily["wind_speed_10m_max"]]
+    dmin = [to_f(t) for t in daily["temperature_2m_min"]]
+    dmax = [to_f(t) for t in daily["temperature_2m_max"]]
+    dprec = daily["precipitation_probability_max"]
+    dwind = [to_mph(w) for w in daily["wind_speed_10m_max"]]
 
     days = [
         datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
@@ -253,23 +272,22 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min Temp")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max Temp")
-    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
-    ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12)
+    ax1.plot(days, dmin, label="Min Temp", color=ACCENT1)
+    ax1.plot(days, dmax, label="Max Temp", color=ACCENT2)
+    ax1.plot(days, dwind, label="Wind", color=ACCENT3, linestyle="--")
+    ax1.fill_between(days, dmin, dmax, alpha=0.12)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35, label="Rain %")
+    ax2.bar(days, dprec, alpha=0.35, color=ACCENT1, label="Rain %")
 
     ax1.set_title(f"7-Day Forecast — {city_name}")
-
     ax1.legend(loc="upper left")
     ax2.legend(loc="upper right")
 
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (WITH LEGEND) ─────────────────────────────────────────────
+# ── 24 HOUR CHART ───────────────────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours (Always ET)")
 
@@ -288,35 +306,25 @@ if show_24h:
         fw.append(wind[i])
         ftmp.append(temps[i])
 
-    # ── rolling min/max (window = 3 hours) ──
     window = 3
     fmin = []
     fmax = []
 
     for i in range(len(ftmp)):
-        start = max(0, i - window)
-        end = i + 1
-        chunk = ftmp[start:end]
-
+        chunk = ftmp[max(0, i-window):i+1]
         fmin.append(min(chunk))
         fmax.append(max(chunk))
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-    # Temp range
-    ax3.plot(ft, fmin, color=ACCENT1, marker="o", label="Min Temp")
-    ax3.plot(ft, fmax, color=ACCENT2, marker="o", label="Max Temp")
-    ax3.fill_between(ft, fmin, fmax, alpha=0.15, color=ACCENT2)
+    ax3.plot(ft, fmin, label="Min Temp", color=ACCENT1)
+    ax3.plot(ft, fmax, label="Max Temp", color=ACCENT2)
+    ax3.fill_between(ft, fmin, fmax, alpha=0.15)
 
-    # Wind
-    ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind")
+    ax3.plot(ft, fw, label="Wind", color=ACCENT3, linestyle="--")
 
-    ax3.set_ylabel("Temp / Wind")
-
-    # Rain
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.35, label="Rain %")
-    ax4.set_ylabel("Rain %")
+    ax4.bar(ft, fp, alpha=0.35, color=ACCENT1, label="Rain %")
 
     ax3.set_title(f"Next 24 Hours — {city_name} (ET)")
 
