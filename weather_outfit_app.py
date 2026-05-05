@@ -207,7 +207,7 @@ st.metric("Wind", f"{wd} mph")
 
 # ── 7-DAY CHART ───────────────────────────────────────────────────────────────
 if show_7day:
-    st.markdown("### 7-Day Forecast (ET Context)")
+    st.markdown("### 7-Day Forecast")
 
     daily = data["daily"]
     d_dates = daily["time"]
@@ -243,7 +243,7 @@ if show_7day:
 
 # ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next Hours (From Selected Time — ET)")
+    st.markdown("### Next Hours")
 
     # anchor to USER selected time (NOT system now)
     start_time = datetime.datetime.combine(date, time_obj)
