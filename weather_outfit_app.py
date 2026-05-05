@@ -304,8 +304,8 @@ if show_24h:
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
     # Temp range
-    ax3.plot(ft, fmin, color=ACCENT1, label="Min Temp")
-    ax3.plot(ft, fmax, color=ACCENT2, label="Max Temp")
+    ax3.plot(ft, fmin, color=ACCENT1, marker="o", label="Min Temp")
+    ax3.plot(ft, fmax, color=ACCENT2, marker="o", label="Max Temp")
     ax3.fill_between(ft, fmin, fmax, alpha=0.15, color=ACCENT2)
 
     # Wind
