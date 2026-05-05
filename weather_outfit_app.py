@@ -17,113 +17,91 @@ st.set_page_config(
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&display=swap');
-
+/* Global font + safe fallbacks */
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
+    font-family: Arial, Helvetica, sans-serif !important;
 }
 
-h1, h2, h3, .stMarkdown h1 { font-family: 'Syne', sans-serif; }
+/* Ensure all text is readable in both light & dark modes */
+html, body, .stApp {
+    color: #111111 !important;            /* default for light mode */
+    background-color: #ffffff;
+}
 
-/* Background */
-.stApp {
-    background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
-    color: #e8e8f0;
+/* Override for dark mode explicitly */
+@media (prefers-color-scheme: dark) {
+    html, body, .stApp {
+        color: #f5f5f5 !important;
+        background-color: #0f0c29;
+    }
+}
+
+/* Headings */
+h1, h2, h3, .stMarkdown h1 {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: 700;
 }
 
 /* Sidebar */
 [data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.04) !important;
-    border-right: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.05) !important;
 }
-[data-testid="stSidebar"] * { color: #e8e8f0 !important; }
+[data-testid="stSidebar"] * {
+    color: inherit !important;
+}
 
-/* Inputs */
-.stTextInput input, .stSelectbox select, .stDateInput input, .stTimeInput input {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    border-radius: 8px !important;
-    color: #fff !important;
+/* Inputs — FIXED visibility issue */
+.stTextInput input,
+.stSelectbox select,
+.stDateInput input,
+.stTimeInput input {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #cccccc !important;
+}
+
+/* Dark mode inputs */
+@media (prefers-color-scheme: dark) {
+    .stTextInput input,
+    .stSelectbox select,
+    .stDateInput input,
+    .stTimeInput input {
+        background: #1e1e2f !important;
+        color: #ffffff !important;
+        border: 1px solid #444 !important;
+    }
+}
+
+/* Placeholder text */
+::placeholder {
+    color: #888 !important;
+    opacity: 1;
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 0.6rem 1.4rem !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
-    width: 100%;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(102,126,234,0.4) !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    color: #ffffff !important;
 }
 
-/* Metric cards */
-.metric-card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 14px;
-    padding: 1.2rem 1.4rem;
-    text-align: center;
-}
-.metric-card .label {
-    font-size: 0.75rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.45);
-    margin-bottom: 0.3rem;
+/* Metric cards text safety */
+.metric-card .label,
+.metric-card .unit {
+    color: inherit !important;
 }
 .metric-card .value {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
-    color: #fff;
-    line-height: 1;
+    color: inherit !important;
 }
-.metric-card .unit {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.5);
-    margin-top: 0.2rem;
-}
-
-/* Outfit banner */
-.outfit-banner {
-    background: linear-gradient(135deg, rgba(102,126,234,0.25), rgba(118,75,162,0.25));
-    border: 1px solid rgba(102,126,234,0.4);
-    border-radius: 16px;
-    padding: 1.4rem 2rem;
-    margin: 1rem 0;
-}
-.outfit-banner .emoji { font-size: 3rem; }
-.outfit-banner .title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.3rem;
-    font-weight: 800;
-    margin: 0.5rem 0 0.3rem;
-}
-.outfit-banner .desc { color: rgba(255,255,255,0.7); font-size: 0.95rem; }
 
 /* Section headings */
 .section-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.1rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.5);
-    margin: 1.5rem 0 0.8rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    padding-bottom: 0.4rem;
+    color: inherit !important;
 }
 
-/* Plot frames */
-.stPlotlyChart, [data-testid="stImage"] { border-radius: 12px; overflow: hidden; }
+/* Ensure markdown + general text always visible */
+.stMarkdown, p, span, div {
+    color: inherit !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
