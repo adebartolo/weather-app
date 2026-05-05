@@ -67,7 +67,7 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (FIXED: US PRIORITY + SAFE FALLBACK) ─────────────────────────────
+# ── GEOCODE (NOW INCLUDES STATE) ─────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -76,7 +76,7 @@ def geocode(location_name):
         url,
         params={
             "name": location_name,
-            "count": 10,   # get multiple candidates
+            "count": 10,
             "language": "en"
         },
         timeout=8
@@ -91,7 +91,7 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
-    # ✅ PRIORITY: United States first
+    # prefer US results first
     us_match = next(
         (r for r in results if r.get("country") == "United States"),
         None
@@ -99,14 +99,23 @@ def geocode(location_name):
 
     p = us_match if us_match else results[0]
 
-    country = p.get("country")
-    if not country or country.strip() == "":
-        country = "United States"
+    country = p.get("country") or "United States"
+    state = p.get("admin1")  # 🌟 STATE / REGION
+
+    # clean formatting
+    parts = [p["name"]]
+
+    if state:
+        parts.append(state)
+
+    parts.append(country)
+
+    full_name = ", ".join(parts)
 
     return {
         "lat": p["latitude"],
         "lon": p["longitude"],
-        "name": f'{p["name"]}, {country}',
+        "name": full_name,
     }
 
 # ── WEATHER ──────────────────────────────────────────────────────────────────
