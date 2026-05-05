@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
 
-# ── TIMEZONE (FIXED STANDARD) ────────────────────────────────────────────────
+# ── TIMEZONE ────────────────────────────────────────────────────────────────
 ET = pytz.timezone("America/New_York")
+UTC = pytz.UTC
 
-# ── PAGE CONFIG ───────────────────────────────────────────────────────────────
+# ── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="What Should I Wear?",
     page_icon="🌤️",
@@ -17,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── STYLE ─────────────────────────────────────────────────────────────────────
+# ── STYLE ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -32,7 +33,7 @@ html, body, [class*="css"] {
 
 st.info("🕒 All times are standardized to **Eastern Time (ET)**.")
 
-# ── MATPLOTLIB THEME ──────────────────────────────────────────────────────────
+# ── MATPLOTLIB THEME ─────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -50,7 +51,7 @@ matplotlib.rcParams.update({
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 4)
 
-# ── HELPERS ───────────────────────────────────────────────────────────────────
+# ── HELPERS ──────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
@@ -63,7 +64,7 @@ if "date" not in st.session_state:
 if "time" not in st.session_state:
     st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
 
-# ── GEOCODE ───────────────────────────────────────────────────────────────────
+# ── GEOCODE ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -89,7 +90,7 @@ def geocode(location_name):
         "name": f'{p["name"]}, {p.get("country","")}',
     }
 
-# ── WEATHER (FIXED TZ → ET) ──────────────────────────────────────────────────
+# ── WEATHER ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon):
     url = (
@@ -114,8 +115,6 @@ def outfit_for(temp_f, precip, wind):
         return "🧣", "Winter Jacket", "Very cold"
     if temp_f < 60:
         return "🧥", "Light Jacket / Hoodie", "Cool weather"
-    if temp_f < 70:
-        return "🥼", "Long Sleeve Shirt", "Mild & comfortable"
     if precip > 60:
         return "☂️", "Umbrella Needed", "Rain expected"
     if wind > 20:
@@ -124,22 +123,18 @@ def outfit_for(temp_f, precip, wind):
         return "👕", "T-Shirt Weather", "Warm day"
     return "😎", "Summer Vibes", "Hot and sunny"
 
-# ── SIDEBAR ───────────────────────────────────────────────────────────────────
+# ── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
     location = st.text_input("Location", "New York City")
 
-    # ── NOW BUTTON (FIXED: updates BOTH date + time + rerun) ──
     if st.button("⚡ Use NOW (ET)"):
         st.session_state.date = now_et.date()
         st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
         st.rerun()
 
-    date = st.date_input(
-        "Date (ET)",
-        key="date"
-    )
+    date = st.date_input("Date (ET)", key="date")
 
     times = [
         datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M").time()
@@ -153,22 +148,20 @@ with st.sidebar:
         key="time"
     )
 
-    units = st.radio("Units", ["°F", "°C"])
-
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (ALWAYS CURRENT ET)", True)
+    show_24h = st.checkbox("24-Hour Chart", True)
 
     forecast_hrs = st.slider("Hours (max 24)", 6, 24, 24)
 
     go = st.button("Get Outfit")
 
-# ── MAIN ──────────────────────────────────────────────────────────────────────
+# ── MAIN ─────────────────────────────────────────────────────────────────────
 st.title("Weather · Outfit Advisor (ET Standardized)")
 
 if not go:
     st.stop()
 
-# ── LOCATION ──────────────────────────────────────────────────────────────────
+# ── LOCATION ────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
 if "error" in geo:
@@ -177,7 +170,7 @@ if "error" in geo:
 
 lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
 
-# ── WEATHER ───────────────────────────────────────────────────────────────────
+# ── WEATHER ─────────────────────────────────────────────────────────────────
 data = fetch_weather(lat, lon)
 
 if "error" in data:
@@ -186,16 +179,18 @@ if "error" in data:
 
 hourly = data["hourly"]
 
+# ✅ FIX: convert to ET-aware timestamps
 times = [
-    datetime.datetime.fromisoformat(t) for t in hourly["time"]
+    datetime.datetime.fromisoformat(t).replace(tzinfo=UTC).astimezone(ET)
+    for t in hourly["time"]
 ]
 
 temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── MATCH USER SELECTION ──────────────────────────────────────────────────────
-target = datetime.datetime.combine(date, time_obj)
+# ── MATCH USER TIME ─────────────────────────────────────────────────────────
+target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
 idx = min(
     range(len(times)),
@@ -214,7 +209,7 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART ───────────────────────────────────────────────────────────────
+# ── 7-DAY ───────────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -232,69 +227,47 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max")
-    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
-    ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
-
-    ax1.set_ylabel("Temp / Wind")
-    ax1.grid(True, alpha=0.4)
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o")
+    ax1.plot(days, d_wind, color=ACCENT3, linestyle="--")
+    ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12)
 
     ax2 = ax1.twinx()
     ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
-    ax2.set_ylabel("Rain %")
 
-    rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
-
-    ax1.legend(
-        handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch],
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.15),
-        ncol=4
-    )
-
-    plt.title(f"7-Day Forecast — {city_name}")
+    ax1.set_title(f"7-Day Forecast — {city_name}")
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (ALWAYS CURRENT ET) ────────────────────────────────────────
+# ── 24 HOUR FIXED ───────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next 24 Hours (Always Based on CURRENT ET)")
+    st.markdown("### Next 24 Hours (Always ET)")
 
     now = datetime.datetime.now(ET)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        if t >= now and len(ft) < forecast_hrs:
-            ft.append(t.strftime("%-I %p"))
-            fp.append(prec[i])
-            fw.append(wind[i])
-            ftmp.append(temps[i])
+        if t < now:
+            continue
+        if len(ft) >= forecast_hrs:
+            break
+
+        ft.append(t.strftime("%-I %p"))
+        fp.append(prec[i])
+        fw.append(wind[i])
+        ftmp.append(temps[i])
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-    ax3.plot(ft, ftmp, color=ACCENT2, label="Temp")
-    ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind")
+    ax3.plot(ft, ftmp, color=ACCENT2)
+    ax3.plot(ft, fw, color=ACCENT3, linestyle="--")
     ax3.fill_between(ft, ftmp, alpha=0.1, color=ACCENT2)
-
-    ax3.set_ylabel("Temp / Wind")
-    ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
     ax4.bar(ft, fp, color=ACCENT1, alpha=0.4)
-    ax4.set_ylabel("Rain % (probability)")
 
-    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
-
-    ax3.legend(
-        handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.2),
-        ncol=3
-    )
-
-    plt.title(f"Next 24 Hours — {city_name} (ET)")
+    ax3.set_title(f"Next 24 Hours — {city_name} (ET)")
     st.pyplot(fig2)
     plt.close(fig2)
 
