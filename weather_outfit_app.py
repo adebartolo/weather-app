@@ -222,41 +222,47 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (FIXED + LEGEND INCLUDED) ────────────────────────────────────
+# ── 24-HOUR CHART (LEGEND INCLUDED) ────────────────────────────────────
 if show_24h:
     st.markdown(f"### Next {forecast_hrs} Hours")
 
     now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
 
-    ft, fp, fw = [], [], []
+    ft, ft_temp, fp, fw = [], [], [], []
 
     for i, t in enumerate(times):
         if t >= now and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
+            ft_temp.append(temps[i])   # ✅ FIXED alignment
             fp.append(prec[i])
             fw.append(wind[i])
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
-    t_line = ax3.plot(ft, temps[:len(ft)], color=ACCENT2, label=f"Temp ({units})")
+    t_line = ax3.plot(ft, ft_temp, color=ACCENT2, label=f"Temp ({units})")
     w_line = ax3.plot(ft, fw, color=ACCENT3, linestyle="--", label="Wind (mph)")
 
-    ax3.fill_between(ft, temps[:len(ft)], alpha=0.1, color=ACCENT2)
+    ax3.fill_between(ft, ft_temp, alpha=0.1, color=ACCENT2)
 
     ax3.set_ylabel("Temp / Wind")
     ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.25, label="Rain %")
-    ax4.set_ylim(0, 130)
+
+    bars = ax4.bar(ft, fp, color=ACCENT1, alpha=0.25, label="Rain %")
+
+    ax4.set_ylim(0, max(100, max(fp) + 10))  # ✅ auto-scale so rain is visible
     ax4.set_ylabel("Precipitation %")
 
-    # ── FIXED LEGEND (includes rain) ──
+    # ── LEGEND (always includes rain) ──
     rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
-    ax3.legend(handles=[t_line[0], w_line[0], rain_patch2],
-               loc="upper center",
-               bbox_to_anchor=(0.5, -0.2),
-               ncol=3)
+
+    ax3.legend(
+        handles=[t_line[0], w_line[0], rain_patch2],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.2),
+        ncol=3
+    )
 
     plt.title(f"Next {forecast_hrs} Hours — {city_name}")
     plt.tight_layout()
