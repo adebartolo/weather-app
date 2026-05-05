@@ -31,7 +31,7 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 # ── TIME NOTE ──────────────────────────────────────────────────────────────────
-st.info("🕒 All times in this app are standardized to **Eastern Time (ET)**. Charts always show forecast data relative to ET.")
+st.info("🕒 All times in this app are standardized to **Eastern Time (ET)**. The 24-hour chart ALWAYS uses current time.")
 
 # ── Matplotlib theme ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
@@ -150,16 +150,9 @@ with st.sidebar:
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (FIXED WINDOW)", True)
+    show_24h = st.checkbox("24-Hour Chart (ALWAYS NOW)", True)
 
-    # HARD CAP 24 HOURS
-    forecast_hrs = st.slider(
-        "Hours (max 24)",
-        6,
-        24,
-        24,
-        help="This only controls display length, not weather accuracy"
-    )
+    forecast_hrs = st.slider("Hours (max 24)", 6, 24, 24)
 
     go = st.button("Get Outfit")
 
@@ -169,7 +162,7 @@ st.title("Weather · Outfit Advisor (ET Standardized)")
 if not go:
     st.stop()
 
-st.caption("📌 Note: Charts show fixed forecast windows. User inputs only affect outfit selection time.")
+st.caption("📌 24-hour chart is ALWAYS anchored to current ET time (inputs do NOT affect it).")
 
 # ── LOCATION ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
@@ -194,7 +187,7 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── MATCH TIME ────────────────────────────────────────────────────────────────
+# ── MATCH TIME (OUTFIT ONLY) ──────────────────────────────────────────────────
 target = datetime.datetime.combine(date, time_obj)
 
 idx = min(
@@ -239,7 +232,7 @@ if show_7day:
 
     ax2 = ax1.twinx()
     ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
-    ax2.set_ylabel("Rain % (higher = more likely precipitation)")
+    ax2.set_ylabel("Rain %")
 
     rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
 
@@ -252,26 +245,20 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
+# ── 24-HOUR CHART (FIXED NOW LOGIC) ───────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next 24 Hours from NOW Forecast")
+    st.markdown("### Next 24 Hours Forecast (CURRENT ET TIME)")
 
-    # ALWAYS anchored to real current ET time
-    now_et = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
+    now = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        # ignore user-selected date/time completely
-        if t >= now_et and len(ft) < forecast_hrs:
+        if t >= now and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
-
-    if len(ft) == 0:
-        st.warning("No forecast data available from current time window.")
-        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -283,10 +270,11 @@ if show_24h:
     ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.35)
-    ax4.set_ylabel("Rain % (probability of precipitation)")
+    ax4.bar(ft, fp, color=ACCENT1, alpha=0.4)
+    ax4.set_ylabel("Rain % (Probability)", color=ACCENT1)
+    ax4.tick_params(axis='y', colors=ACCENT1)
 
-    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
+    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
 
     ax3.legend(
         handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
@@ -295,7 +283,7 @@ if show_24h:
         ncol=3
     )
 
-    plt.title(f"Next {forecast_hrs} Hours (from NOW ET) — {city_name}")
+    plt.title(f"Next 24 Hours — {city_name}")
     st.pyplot(fig2)
     plt.close(fig2)
 
