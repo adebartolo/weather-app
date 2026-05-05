@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
 
-# ── TIMEZONE (GLOBAL STANDARD) ────────────────────────────────────────────────
+# ── TIMEZONE ───────────────────────────────────────────────────────────────────
 ET = pytz.timezone("US/Eastern")
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# ── PAGE CONFIG ────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="What Should I Wear?",
     page_icon="🌤️",
@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Styling ────────────────────────────────────────────────────────────────────
+# ── STYLE ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -30,10 +30,9 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-# ── TIME NOTE ──────────────────────────────────────────────────────────────────
-st.info("🕒 All times in this app are standardized to **Eastern Time (ET)**. The 24-hour chart ALWAYS uses current time.")
+st.info("🕒 All times are in **Eastern Time (ET)**. The 24-hour chart always uses CURRENT time.")
 
-# ── Matplotlib theme ───────────────────────────────────────────────────────────
+# ── MATPLOTLIB THEME ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -51,20 +50,22 @@ matplotlib.rcParams.update({
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 4)
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+# ── HELPERS ────────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
+
+def to_et(dt):
+    """Make timezone consistent (ET-aware)."""
+    if dt.tzinfo is None:
+        return ET.localize(dt)
+    return dt.astimezone(ET)
 
 # ── GEOCODE ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
-    r = requests.get(
-        url,
-        params={"name": location_name, "count": 1, "language": "en"},
-        timeout=8
-    )
+    r = requests.get(url, params={"name": location_name, "count": 1}, timeout=8)
 
     if r.status_code != 200:
         return {"error": "API_LIMITED"}
@@ -79,23 +80,18 @@ def geocode(location_name):
         "lat": p["latitude"],
         "lon": p["longitude"],
         "name": f'{p["name"]}, {p.get("country","")}',
-        "tz": "UTC"
     }
 
 # ── WEATHER ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
-def fetch_weather(lat, lon, tz):
+def fetch_weather(lat, lon):
     url = (
         "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}&timezone={tz}"
+        f"?latitude={lat}&longitude={lon}&timezone=auto"
         "&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
         "&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
     )
-
     r = requests.get(url, timeout=10)
-    if r.status_code != 200:
-        return {"error": "API_LIMITED"}
-
     return r.json()
 
 # ── OUTFIT LOGIC ───────────────────────────────────────────────────────────────
@@ -106,15 +102,13 @@ def outfit_for(temp_f, precip, wind):
         return "🧣", "Winter Jacket", "Very cold"
     if temp_f < 60:
         return "🧥", "Light Jacket / Hoodie", "Cool weather"
-    if temp_f < 70:
-        return "🥼", "Long Sleeve Shirt", "Mild & comfortable"
     if precip > 60:
         return "☂️", "Umbrella Needed", "Rain expected"
     if wind > 20:
         return "💨", "Windbreaker", "Windy day"
-    if temp_f < 80:
-        return "👕", "T-Shirt Weather", "Warm day"
-    return "😎", "Summer Vibes", "Hot and sunny"
+    if temp_f < 75:
+        return "👕", "Long Sleeve Shirt", "Mild & comfortable"
+    return "😎", "T-Shirt Weather", "Warm & sunny"
 
 # ── SIDEBAR ────────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -122,13 +116,22 @@ with st.sidebar:
 
     location = st.text_input("Location", "New York City")
 
-    now_pressed = st.button("⚡ Use NOW (ET)")
-
     now_et = datetime.datetime.now(ET)
 
+    now_pressed = st.button("⚡ Use NOW (ET)")
+
+    # session defaults
+    if "use_now" not in st.session_state:
+        st.session_state["use_now"] = False
+
     if now_pressed:
+        st.session_state["use_now"] = True
         st.session_state["date"] = now_et.date()
         st.session_state["time"] = now_et.replace(minute=0, second=0, microsecond=0).time()
+
+    # label showing mode
+    mode_label = "NOW (current ET time)" if st.session_state.get("use_now") else "Manual selection"
+    st.caption(f"Mode: {mode_label}")
 
     date = st.date_input(
         "Date (ET)",
@@ -143,6 +146,7 @@ with st.sidebar:
     time_obj = st.selectbox(
         "Time (ET)",
         times,
+        index=0,
         format_func=lambda t: t.strftime("%-I:%M %p"),
         key="time"
     )
@@ -150,7 +154,7 @@ with st.sidebar:
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (ALWAYS NOW)", True)
+    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME ONLY)", True)
 
     forecast_hrs = st.slider("Hours (max 24)", 6, 24, 24)
 
@@ -162,33 +166,28 @@ st.title("Weather · Outfit Advisor (ET Standardized)")
 if not go:
     st.stop()
 
-st.caption("📌 24-hour chart is ALWAYS anchored to current ET time (inputs do NOT affect it).")
-
 # ── LOCATION ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
 if "error" in geo:
-    st.error("❌ Location API failed or not found.")
+    st.error("❌ Location not found.")
     st.stop()
 
-lat, lon, city_name, tz = geo["lat"], geo["lon"], geo["name"], geo["tz"]
+lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
 
 # ── WEATHER ────────────────────────────────────────────────────────────────────
-data = fetch_weather(lat, lon, tz)
-
-if "error" in data:
-    st.error("❌ Weather API failed.")
-    st.stop()
+data = fetch_weather(lat, lon)
 
 hourly = data["hourly"]
 
-times = [datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in hourly["time"]]
+times = [to_et(datetime.datetime.fromisoformat(t)) for t in hourly["time"]]
 temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── MATCH TIME (OUTFIT ONLY) ──────────────────────────────────────────────────
+# ── SELECTED TIME ──────────────────────────────────────────────────────────────
 target = datetime.datetime.combine(date, time_obj)
+target = to_et(target)
 
 idx = min(
     range(len(times)),
@@ -207,23 +206,24 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART ───────────────────────────────────────────────────────────────
+# ── 7 DAY ──────────────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
     daily = data["daily"]
+
     d_dates = daily["time"]
-    d_tmin = [to_f(t) for t in daily["temperature_2m_min"]]
-    d_tmax = [to_f(t) for t in daily["temperature_2m_max"]]
+    d_tmin = [to_f(x) for x in daily["temperature_2m_min"]]
+    d_tmax = [to_f(x) for x in daily["temperature_2m_max"]]
     d_prec = daily["precipitation_probability_max"]
-    d_wind = [to_mph(w) for w in daily["wind_speed_10m_max"]]
+    d_wind = [to_mph(x) for x in daily["wind_speed_10m_max"]]
 
     days = [datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d") for d in d_dates]
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max")
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min Temp")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max Temp")
     ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
     ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
 
@@ -231,43 +231,32 @@ if show_7day:
     ax1.grid(True, alpha=0.4)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.35)
-    ax2.set_ylabel("Rain %")
+    ax2.bar(days, d_prec, color="#ff6b6b", alpha=0.4)
+    ax2.set_ylabel("Precipitation % (rain likelihood)")
 
-    rain_patch = mpatches.Patch(color=ACCENT1, alpha=0.35, label="Rain %")
+    rain_patch = mpatches.Patch(color="#ff6b6b", alpha=0.4, label="Rain %")
 
     ax1.legend(handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch],
-               loc="upper center",
-               bbox_to_anchor=(0.5, -0.15),
-               ncol=4)
+               loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=4)
 
     plt.title(f"7-Day Forecast — {city_name}")
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (FIXED NOW LOGIC) ───────────────────────────────────────────
+# ── 24 HOUR (ALWAYS CURRENT TIME) ─────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next 24 Hours Forecast (CURRENT ET TIME)")
+    st.markdown("### Next 24 Hours (based on CURRENT ET time)")
 
-    # current time in ET (normalized to top of hour)
-    now = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
+    now = to_et(datetime.datetime.now())
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-
-        # make API time "aware" in ET for safe comparison
-        t_et = ET.localize(t) if t.tzinfo is None else t.astimezone(ET)
-
-        if t_et >= now and len(ft) < forecast_hrs:
-            ft.append(t_et.strftime("%-I %p"))
+        if t >= now and len(ft) < forecast_hrs:
+            ft.append(t.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
-
-    if len(ft) == 0:
-        st.warning("No forecast data available for current time window.")
-        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -279,20 +268,15 @@ if show_24h:
     ax3.grid(True, alpha=0.4)
 
     ax4 = ax3.twinx()
-    ax4.bar(ft, fp, color=ACCENT1, alpha=0.4)
-    ax4.set_ylabel("Rain % (Probability)", color=ACCENT1)
-    ax4.tick_params(axis='y', colors=ACCENT1)
+    ax4.bar(ft, fp, color="#ff6b6b", alpha=0.45)
+    ax4.set_ylabel("Rain % likelihood")
 
-    rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
+    rain_patch2 = mpatches.Patch(color="#ff6b6b", alpha=0.45, label="Rain %")
 
-    ax3.legend(
-        handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.2),
-        ncol=3
-    )
+    ax3.legend(handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
+               loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3)
 
-    plt.title(f"Next 24 Hours — {city_name}")
+    plt.title("Next 24 Hours Forecast (CURRENT TIME BASED)")
     st.pyplot(fig2)
     plt.close(fig2)
 
