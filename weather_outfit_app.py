@@ -18,111 +18,57 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Global font */
+/* Font consistency */
 html, body, [class*="css"] {
     font-family: Arial, Helvetica, sans-serif !important;
 }
 
-/* Base colors (light mode default) */
+/* Keep your dark gradient */
+.stApp {
+    background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
+}
+
+/* Ensure readable default text */
 html, body, .stApp {
-    color: #111111 !important;
-}
-
-/* Dark mode override */
-@media (prefers-color-scheme: dark) {
-    html, body, .stApp {
-        color: #f5f5f5 !important;
-    }
-}
-
-/* Headings */
-h1, h2, h3, .stMarkdown h1 {
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-weight: 700;
+    color: #e8e8f0 !important;
 }
 
 /* Sidebar */
-[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.04) !important;
-}
 [data-testid="stSidebar"] * {
-    color: inherit !important;
+    color: #e8e8f0 !important;
 }
 
-/* Inputs (FIX visibility issue) */
+/* FIX: Inputs always visible */
 .stTextInput input,
 .stSelectbox select,
 .stDateInput input,
 .stTimeInput input {
-    background: #ffffff !important;
-    color: #111111 !important;
-    border: 1px solid #cccccc !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
 }
 
-/* Dark mode inputs */
-@media (prefers-color-scheme: dark) {
-    .stTextInput input,
-    .stSelectbox select,
-    .stDateInput input,
-    .stTimeInput input {
-        background: #1e1e2f !important;
-        color: #ffffff !important;
-        border: 1px solid #444 !important;
-    }
-}
-
-/* Placeholder */
+/* Placeholder text */
 ::placeholder {
-    color: #888 !important;
+    color: rgba(255,255,255,0.6) !important;
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
-    color: #ffffff !important;
-    border-radius: 10px !important;
-    width: 100%;
     font-family: Arial, Helvetica, sans-serif !important;
+    color: #ffffff !important;
 }
 
-/* Metric cards */
-.metric-card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 14px;
-    padding: 1.2rem 1.4rem;
-    text-align: center;
+/* Prevent invisible text anywhere */
+.stMarkdown, p, span, div, label {
+    color: inherit !important;
 }
+
+/* Metric cards safety */
 .metric-card .label,
 .metric-card .value,
 .metric-card .unit {
-    color: inherit !important;
-}
-
-/* Outfit banner */
-.outfit-banner {
-    background: linear-gradient(135deg, rgba(102,126,234,0.25), rgba(118,75,162,0.25));
-    border-radius: 16px;
-    padding: 1.4rem 2rem;
-    margin: 1rem 0;
-}
-.outfit-banner .title {
-    font-weight: 700;
-}
-
-/* Section titles */
-.section-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: inherit !important;
-    margin: 1.5rem 0 0.8rem;
-}
-
-/* General text safety */
-.stMarkdown, p, span, div {
-    color: inherit !important;
+    color: #ffffff !important;
 }
 
 </style>
