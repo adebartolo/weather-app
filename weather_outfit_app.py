@@ -14,39 +14,20 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── CSS (your original) ────────────────────────────────────────────────────────
+# ── Styling ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:wght@300;400&display=swap');
-
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
 }
-
-h1, h2, h3 {
-    font-family: 'Syne', sans-serif;
-}
-
 .stApp {
-    background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
+    background: #0f0c29;
     color: #e8e8f0;
-}
-
-.stTextInput input, .stSelectbox, .stDateInput, .stTimeInput {
-    background: rgba(255,255,255,0.06) !important;
-    color: #fff !important;
-}
-
-.stButton > button {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
-    color: white !important;
-    border-radius: 10px !important;
-    width: 100%;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Matplotlib theme ──────────────────────────────────────────────────────────
+# ── Matplotlib theme ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -56,207 +37,204 @@ matplotlib.rcParams.update({
     "xtick.color": "#888899",
     "ytick.color": "#888899",
     "grid.color": "#2a2a4a",
+    "grid.linewidth": 0.7,
+    "font.family": "DejaVu Sans",
+    "font.size": 9,
 })
 
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
-CHART_SIZE = (13, 3.8)
+CHART_SIZE = (13, 4)
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── FIXED GEOCODER ────────────────────────────────────────────────────────────
-GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
-
+# ── Geocode ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
-    try:
-        if not location_name:
-            return None
+    url = "https://geocoding-api.open-meteo.com/v1/search"
 
+    try:
         r = requests.get(
-            GEOCODE_URL,
-            params={
-                "q": location_name,
-                "format": "json",
-                "limit": 1
-            },
-            headers={"User-Agent": "weather-app/1.0"},
+            url,
+            params={"name": location_name, "count": 1, "language": "en"},
             timeout=8
         )
 
         if r.status_code != 200:
-            return "RATE_LIMIT"
+            return {"error": "API_LIMITED"}
 
         data = r.json()
-        if not data:
-            return None
+        if "results" not in data:
+            return {"error": "NOT_FOUND"}
 
-        lat = float(data[0]["lat"])
-        lon = float(data[0]["lon"])
-        name = data[0]["display_name"].split(",")[0]
+        p = data["results"][0]
 
-        return lat, lon, name, "UTC"
+        return {
+            "lat": p["latitude"],
+            "lon": p["longitude"],
+            "name": f'{p["name"]}, {p.get("country","")}',
+            "tz": "UTC"
+        }
 
-    except Exception:
-        return "ERROR"
+    except:
+        return {"error": "API_LIMITED"}
 
-
-# ── Weather API ───────────────────────────────────────────────────────────────
+# ── Weather ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon, tz):
     url = (
-        f"https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        f"&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
-        f"&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
-        f"&timezone={tz}"
+        "https://api.open-meteo.com/v1/forecast"
+        f"?latitude={lat}&longitude={lon}&timezone={tz}"
+        "&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
+        "&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
     )
 
     r = requests.get(url, timeout=10)
-
     if r.status_code != 200:
-        return None, "API_ERROR"
+        return {"error": "API_LIMITED"}
 
-    return r.json(), None
+    return r.json()
 
-
-# ── Outfit logic ──────────────────────────────────────────────────────────────
+# ── Outfit logic ───────────────────────────────────────────────────────────────
 def outfit_for(temp_f, precip, wind):
-    if temp_f < 40:
-        return "🧥", "Heavy Jacket", "Very cold — bundle up."
-    if temp_f < 60:
-        return "🧥", "Light Jacket", "Cool weather."
+    if temp_f < 32:
+        return "🧥", "Heavy Coat", "Freezing cold"
+    if temp_f < 50:
+        return "🧣", "Jacket", "Cold weather"
     if precip > 60:
-        return "☂️", "Rain Gear", "Bring umbrella."
+        return "☂️", "Umbrella Needed", "Rain expected"
     if wind > 20:
-        return "💨", "Wind Layer", "Windy conditions."
-    return "👕", "T-Shirt Weather", "Comfortable day."
+        return "💨", "Windbreaker", "Windy day"
+    if temp_f < 75:
+        return "👕", "T-Shirt Weather", "Mild day"
+    return "😎", "Summer Vibes", "Hot and sunny"
 
-
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🌤️ Outfit App")
+    st.title("🌤️ Outfit Planner")
 
     location = st.text_input("Location", "New York City")
 
-    date = st.date_input(
-        "Date",
-        value=datetime.date.today() + datetime.timedelta(days=1)
-    )
+    date = st.date_input("Date", datetime.date.today() + datetime.timedelta(days=1))
 
-    time = st.time_input("Time", datetime.time(13, 0))
+    times = [
+        datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M").strftime("%-I:%M %p")
+        for h in range(24) for m in [0, 30]
+    ]
+    time_str = st.selectbox("Time", times, index=26)
+    time_obj = datetime.datetime.strptime(time_str, "%I:%M %p").time()
 
     units = st.radio("Units", ["°F", "°C"])
 
+    show_7 = st.checkbox("7-Day Chart", True)
+    show_24 = st.checkbox("24-Hour Chart", True)
+    hours = st.slider("Hours", 6, 48, 24)
+
     go = st.button("Get Outfit")
 
-
-# ── MAIN ──────────────────────────────────────────────────────────────────────
-st.title("Weather Outfit Advisor")
+# ── Main ───────────────────────────────────────────────────────────────────────
+st.title("Weather · Outfit Advisor")
 
 if not go:
     st.stop()
 
-# ── GEOCODE ───────────────────────────────────────────────────────────────────
+# ── Location ───────────────────────────────────────────────────────────────────
 geo = geocode(location)
 
-if geo == "RATE_LIMIT":
-    st.error("⚠️ Location service rate-limited. Try again in a few seconds.")
+if "error" in geo:
+    if geo["error"] == "API_LIMITED":
+        st.error("❌ Location API limited. Try again shortly.")
+    else:
+        st.error("❌ Location not found.")
     st.stop()
 
-if geo == "ERROR":
-    st.error("⚠️ Location API error.")
+lat, lon, city, tz = geo["lat"], geo["lon"], geo["name"], geo["tz"]
+
+# ── Weather ────────────────────────────────────────────────────────────────────
+data = fetch_weather(lat, lon, tz)
+
+if "error" in data:
+    st.error("❌ Weather API limited. Try again later.")
     st.stop()
 
-if not geo:
-    st.error("Could not find location. Try 'New York, USA'.")
-    st.stop()
-
-lat, lon, city, tz = geo
-
-# ── WEATHER ────────────────────────────────────────────────────────────────────
-data, err = fetch_weather(lat, lon, tz)
-
-if err == "API_ERROR":
-    st.error("⚠️ Weather API limited or unavailable.")
-    st.stop()
-
-if not data:
-    st.error("Weather fetch failed.")
-    st.stop()
-
-
-# ── Parse ─────────────────────────────────────────────────────────────────────
 hourly = data["hourly"]
 
-times = [
-    datetime.datetime.fromisoformat(t)
-    for t in hourly["time"]
-]
-
-temps = hourly["temperature_2m"]
+times = [datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in hourly["time"]]
+temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
-wind = hourly["wind_speed_10m"]
+wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# pick closest time
-target_dt = datetime.datetime.combine(date, time)
+# ── Match time ────────────────────────────────────────────────────────────────
+target = datetime.datetime.combine(date, time_obj)
 
 idx = min(
     range(len(times)),
-    key=lambda i: abs((times[i] - target_dt).total_seconds())
+    key=lambda i: abs((times[i] - target).total_seconds())
 )
 
-temp_f = to_f(temps[idx])
-precip = prec[idx]
-wind_mph = to_mph(wind[idx])
+tf, pr, wd = temps[idx], prec[idx], wind[idx]
 
-emoji, outfit, desc = outfit_for(temp_f, precip, wind_mph)
+emoji, title, desc = outfit_for(tf, pr, wd)
 
-# ── OUTPUT ─────────────────────────────────────────────────────────────────────
-st.subheader(f"{emoji} {outfit}")
+st.subheader(f"{emoji} {title}")
 st.write(desc)
 
 st.metric("Location", city)
-st.metric("Temp", f"{temp_f}°F")
-st.metric("Rain", f"{precip}%")
-st.metric("Wind", f"{wind_mph} mph")
+st.metric("Temp", f"{tf}°F")
+st.metric("Rain", f"{pr}%")
+st.metric("Wind", f"{wd} mph")
 
+# ── 7 DAY CHART ───────────────────────────────────────────────────────────────
+if show_7:
+    daily = data["daily"]
 
-# ── CHARTS (FIXED + CLEAN) ────────────────────────────────────────────────────
-st.subheader("Hourly Forecast")
+    days = [
+        datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a")
+        for d in daily["time"]
+    ]
 
-fig, ax = plt.subplots(figsize=CHART_SIZE)
+    tmin = [to_f(v) for v in daily["temperature_2m_min"]]
+    tmax = [to_f(v) for v in daily["temperature_2m_max"]]
+    rain = daily["precipitation_probability_max"]
+    w = [to_mph(v) for v in daily["wind_speed_10m_max"]]
 
-ax.plot(temps[:24], color=ACCENT2, label="Temp")
-ax.plot(wind[:24], color=ACCENT3, label="Wind")
+    fig, ax = plt.subplots(figsize=CHART_SIZE)
 
-ax2 = ax.twinx()
-ax2.bar(range(24), prec[:24], alpha=0.2, color=ACCENT1, label="Rain")
+    ax.plot(days, tmin, label="Min Temp", color=ACCENT1, marker="o")
+    ax.plot(days, tmax, label="Max Temp", color=ACCENT2, marker="o")
+    ax.plot(days, w, label="Wind", color=ACCENT3, linestyle="--")
 
-ax.set_title("Next 24 Hours")
-ax.legend(loc="upper left")
+    ax2 = ax.twinx()
+    ax2.bar(days, rain, alpha=0.2, color=ACCENT1, label="Rain %")
 
-st.pyplot(fig)
-plt.close(fig)
+    ax.set_title("7-Day Forecast")
+    ax.legend()
+    st.pyplot(fig)
 
+# ── 24 HOUR CHART ──────────────────────────────────────────────────────────────
+if show_24:
+    now = datetime.datetime.now()
 
-# ── DAILY ──────────────────────────────────────────────────────────────────────
-st.subheader("7-Day Forecast")
+    f_t, f_tmp, f_r, f_w = [], [], [], []
 
-daily = data["daily"]
+    for i, t in enumerate(times):
+        if t >= now and len(f_t) < hours:
+            f_t.append(t.strftime("%I %p"))
+            f_tmp.append(temps[i])
+            f_r.append(prec[i])
+            f_w.append(wind[i])
 
-days = daily["time"]
-tmin = daily["temperature_2m_min"]
-tmax = daily["temperature_2m_max"]
+    fig2, ax = plt.subplots(figsize=CHART_SIZE)
 
-fig2, ax = plt.subplots(figsize=CHART_SIZE)
+    ax.plot(f_t, f_tmp, label="Temp", color=ACCENT2, marker="o")
+    ax.plot(f_t, f_w, label="Wind", color=ACCENT3, linestyle="--")
 
-ax.plot(tmin, marker="o", color=ACCENT1)
-ax.plot(tmax, marker="o", color=ACCENT2)
+    ax2 = ax.twinx()
+    ax2.bar(f_t, f_r, alpha=0.2, color=ACCENT1)
 
-ax.set_xticks(range(len(days)))
-ax.set_xticklabels(days, rotation=45)
+    ax.set_title(f"Next {hours} Hours")
+    ax.legend()
+    st.pyplot(fig2)
 
-st.pyplot(fig2)
-plt.close(fig2)
+st.success("Done ✔️")
