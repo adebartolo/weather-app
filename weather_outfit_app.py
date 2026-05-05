@@ -243,18 +243,25 @@ if show_7day:
 
 # ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next Hours (CURRENT TIME ET FORECAST)")
+    st.markdown("### Next Hours (From Selected Time — ET)")
 
-    now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
+    # anchor to USER selected time (NOT system now)
+    start_time = datetime.datetime.combine(date, time_obj)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        if t >= now and len(ft) < forecast_hrs:
+        # start from selected time instead of current time
+        if t >= start_time and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
+
+    # safety fallback (if selection is near end of dataset)
+    if len(ft) == 0:
+        st.warning("No forecast data available for selected time window.")
+        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -271,10 +278,14 @@ if show_24h:
 
     rain_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.25, label="Rain %")
 
-    ax3.legend(handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
-               loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3)
+    ax3.legend(
+        handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.2),
+        ncol=3
+    )
 
-    plt.title(f"Next {forecast_hrs} Hours — {city_name}")
+    plt.title(f"Next {forecast_hrs} Hours from {time_obj.strftime('%-I %p')} (ET)")
     st.pyplot(fig2)
     plt.close(fig2)
 
