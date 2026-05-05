@@ -87,10 +87,15 @@ def geocode(location_name):
 
     p = data["results"][0]
 
+    # ✅ FIX: default country fallback
+    country = p.get("country")
+    if not country or country.strip() == "":
+        country = "United States"
+
     return {
         "lat": p["latitude"],
         "lon": p["longitude"],
-        "name": f'{p["name"]}, {p.get("country","")}',
+        "name": f'{p["name"]}, {country}',
     }
 
 # ── WEATHER ──────────────────────────────────────────────────────────────────
@@ -130,7 +135,6 @@ def outfit_for(temp_f, precip, wind):
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
-    # ✅ placeholder + default
     location = st.text_input(
         "Location",
         value="New York City",
