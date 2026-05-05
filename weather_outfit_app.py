@@ -10,14 +10,13 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
-# ── STATE MAP ───────────────────────────────────────────────────────────────
+# ── STATE MAP (smart resolution) ────────────────────────────────────────────
 STATE_MAP = {
-    "ny": "New York", "nj": "New Jersey", "ca": "California",
-    "fl": "Florida", "tx": "Texas", "il": "Illinois",
-    "pa": "Pennsylvania", "ga": "Georgia", "nc": "North Carolina",
-    "sc": "South Carolina", "va": "Virginia", "ma": "Massachusetts",
-    "oh": "Ohio", "mi": "Michigan", "wa": "Washington",
-    "or": "Oregon", "az": "Arizona", "nv": "Nevada",
+    "ny": "New York", "nj": "New Jersey", "ca": "California", "fl": "Florida",
+    "tx": "Texas", "il": "Illinois", "pa": "Pennsylvania", "ga": "Georgia",
+    "nc": "North Carolina", "sc": "South Carolina", "va": "Virginia",
+    "ma": "Massachusetts", "oh": "Ohio", "mi": "Michigan",
+    "wa": "Washington", "or": "Oregon", "az": "Arizona", "nv": "Nevada",
     "co": "Colorado", "ut": "Utah"
 }
 
@@ -44,7 +43,7 @@ html, body, [class*="css"] {
 
 st.info("🕒 All times are standardized to **Eastern Time (ET)**.")
 
-# ── MATPLOTLIB STYLE ────────────────────────────────────────────────────────
+# ── MATPLOTLIB THEME ─────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -62,11 +61,11 @@ matplotlib.rcParams.update({
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 4)
 
-# ── HELPERS ──────────────────────────────────────────────────────────────────
+# ── HELPERS ─────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── SESSION ─────────────────────────────────────────────────────────────────
+# ── SESSION DEFAULTS ─────────────────────────────────────────────────────────
 now_et = datetime.datetime.now(ET)
 
 if "date" not in st.session_state:
@@ -78,14 +77,13 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODER (FULL FIX: STATE + US PRIORITY + NO WRONG MATCHES) ─────────────
+# ── GEOCODER (FIXED + STATE + US PRIORITY) ──────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     raw = location_name.strip().lower()
 
-    # normalize state abbreviations
     if raw in STATE_MAP:
         raw = STATE_MAP[raw]
 
@@ -105,19 +103,9 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
-    # ── FORCE US ONLY ──
     us = [r for r in results if r.get("country") == "United States"]
 
-    if not us:
-        p = results[0]
-    else:
-        # ── STATE PRIORITY MATCH ──
-        state_match = [
-            r for r in us
-            if r.get("admin1", "").lower() == raw.lower()
-        ]
-
-        p = state_match[0] if state_match else us[0]
+    p = us[0] if us else results[0]
 
     country = p.get("country", "United States")
     state = p.get("admin1")
@@ -241,16 +229,18 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── MATCH TIME ──────────────────────────────────────────────────────────────
-target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
+# ── CURRENT / FUTURE LOGIC ────────────────────────────────────────────────
+selected = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 is_today = date == now_et.date()
 
 if is_today:
-    idx = min(range(len(times)), key=lambda i: abs((times[i] - target).total_seconds()))
-    tf, pr, wd = temps[idx], prec[idx], wind[idx]
+    idx = min(range(len(times)), key=lambda i: abs((times[i] - selected).total_seconds()))
+    tf = temps[idx]
+    pr = prec[idx]
+    wd = wind[idx]
     temp_label = f"{tf}°F"
 else:
-    day_idx = min((target.date() - now_et.date()).days, len(daily["temperature_2m_min"]) - 1)
+    day_idx = min((selected.date() - now_et.date()).days, len(daily["temperature_2m_min"]) - 1)
 
     tmin = to_f(daily["temperature_2m_min"][day_idx])
     tmax = to_f(daily["temperature_2m_max"][day_idx])
@@ -271,7 +261,7 @@ st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART ────────────────────────────────────────────────────────────
+# ── 7 DAY CHART ────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -287,13 +277,13 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, dmin, label="Min Temp")
-    ax1.plot(days, dmax, label="Max Temp")
-    ax1.plot(days, wind_d, label="Wind", linestyle="--")
+    ax1.plot(days, dmin, label="Min Temp", color=ACCENT1)
+    ax1.plot(days, dmax, label="Max Temp", color=ACCENT2)
+    ax1.plot(days, wind_d, label="Wind", color=ACCENT3, linestyle="--")
     ax1.fill_between(days, dmin, dmax, alpha=0.15)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, rain, alpha=0.3, label="Rain %")
+    ax2.bar(days, rain, alpha=0.3, color=ACCENT1, label="Rain %")
 
     ax1.set_title(f"7-Day Forecast — {city_name}")
     ax1.legend(loc="upper left")
@@ -321,18 +311,20 @@ if show_24h:
         fw.append(wind[i])
         ftmp.append(temps[i])
 
+    # rolling min/max
     fmin = [min(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
     fmax = [max(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
 
     fig2, ax = plt.subplots(figsize=CHART_SIZE)
 
-    ax.plot(ft, fmin, label="Min Temp")
-    ax.plot(ft, fmax, label="Max Temp")
+    ax.plot(ft, fmin, label="Min Temp", color=ACCENT1)
+    ax.plot(ft, fmax, label="Max Temp", color=ACCENT2)
     ax.fill_between(ft, fmin, fmax, alpha=0.15)
-    ax.plot(ft, fw, label="Wind", linestyle="--")
+
+    ax.plot(ft, fw, label="Wind", color=ACCENT3, linestyle="--")
 
     ax2 = ax.twinx()
-    ax2.bar(ft, fp, alpha=0.3, label="Rain %")
+    ax2.bar(ft, fp, alpha=0.3, color=ACCENT1, label="Rain %")
 
     ax.set_title(f"Next 24 Hours — {city_name}")
     ax.legend(loc="upper left")
