@@ -5,6 +5,7 @@ import pytz
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
+from streamlit_searchbox import st_searchbox
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -46,6 +47,21 @@ html, body, .stApp {
     background: rgba(255,255,255,0.08) !important;
     color: #ffffff !important;
     border: 1px solid rgba(255,255,255,0.25) !important;
+}
+
+/* Searchbox styling to match dark theme */
+.st-searchbox input {
+    background: rgba(255,255,255,0.08) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
+    border-radius: 4px !important;
+}
+.st-searchbox .dropdown-item {
+    background: #1a1a2e !important;
+    color: #e8e8f0 !important;
+}
+.st-searchbox .dropdown-item:hover {
+    background: rgba(102,126,234,0.3) !important;
 }
 
 /* Placeholder text */
@@ -92,41 +108,82 @@ ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 3.8)
 
 # ── Utility helpers ────────────────────────────────────────────────────────────
-def to_f(c):  return round(c * 9/5 + 32, 1)
+def to_f(c):   return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
+GEOCODE_URL      = "https://nominatim.openstreetmap.org/search"
+GEOCODE_HEADERS  = {"User-Agent": "WeatherOutfitApp/1.0"}
 
-@st.cache_data(show_spinner=False)
-def geocode(location_name):
-    """Return (lat, lon, display_name, timezone_str) or None."""
+
+# ── Nominatim search — called on every keystroke by streamlit-searchbox ────────
+def search_locations(query: str) -> list[str]:
+    """
+    Return a list of display-name strings matching the query.
+    streamlit-searchbox calls this function with whatever the user has typed.
+    The returned list becomes the dropdown options.
+    """
+    query = query.strip()
+    if len(query) < 2:          # don't fire for 0–1 chars
+        return []
     try:
-        # Normalize: title-case each comma-separated part, strip whitespace
-        normalized = ", ".join(part.strip().title() for part in location_name.split(","))
         r = requests.get(
             GEOCODE_URL,
-            params={"q": normalized, "format": "json", "limit": 1},
-            headers={"User-Agent": "WeatherOutfitApp/1.0"},
+            params={
+                "q":              query,
+                "format":         "json",
+                "limit":          6,          # show up to 6 suggestions
+                "addressdetails": 1,
+                "featuretype":    "city",     # bias toward populated places
+            },
+            headers=GEOCODE_HEADERS,
+            timeout=5,
+        )
+        results = r.json()
+        if not results:
+            return []
+
+        seen, options = set(), []
+        for res in results:
+            name = res.get("display_name", "")
+            if name and name not in seen:
+                seen.add(name)
+                options.append(name)
+        return options
+
+    except Exception:
+        return []
+
+
+# ── Geocode a chosen display_name to get (lat, lon, short_name, tz) ───────────
+@st.cache_data(show_spinner=False)
+def geocode(display_name: str):
+    """Resolve the chosen display_name to coordinates + timezone."""
+    try:
+        r = requests.get(
+            GEOCODE_URL,
+            params={"q": display_name, "format": "json", "limit": 1},
+            headers=GEOCODE_HEADERS,
             timeout=6,
         )
         results = r.json()
         if not results:
             return None
-        lat = float(results[0]["lat"])
-        lon = float(results[0]["lon"])
-        display = results[0]["display_name"].split(",")[0]
 
-        # Timezone via timezonefinder (fallback: UTC)
+        lat  = float(results[0]["lat"])
+        lon  = float(results[0]["lon"])
+        # Short friendly name: first comma-delimited token
+        short = results[0]["display_name"].split(",")[0].strip()
+
         try:
             from timezonefinder import TimezoneFinder
-            tf = TimezoneFinder()
-            tz = tf.timezone_at(lat=lat, lng=lon) or "UTC"
+            tz = TimezoneFinder().timezone_at(lat=lat, lng=lon) or "UTC"
         except Exception:
             tz = "UTC"
 
-        return lat, lon, display, tz
+        return lat, lon, short, tz
     except Exception:
         return None
+
 
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon, tz, daily_vars=None, hourly_vars=None):
@@ -138,6 +195,7 @@ def fetch_weather(lat, lon, tz, daily_vars=None, hourly_vars=None):
     if hourly_vars: url += "&hourly=" + ",".join(hourly_vars)
     r = requests.get(url, timeout=8)
     return r.json() if r.status_code == 200 else None
+
 
 def outfit_for(temp_f, precip_pct, wind_mph):
     if temp_f < 32:
@@ -158,12 +216,30 @@ def outfit_for(temp_f, precip_pct, wind_mph):
         return "🌦️", "Light Clothes + Umbrella", "Warm but some rain chance — stay light and be ready."
     return "😎", "Summer Vibes", "Hot and sunny — shorts, sunscreen, and shades!"
 
-# ── Sidebar inputs ─────────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown('<div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.2rem">🌤️ What to Wear</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:rgba(255,255,255,0.4);font-size:0.82rem;margin-bottom:1.5rem">Dress smarter, not harder.</div>', unsafe_allow_html=True)
 
-    location_input = st.text_input("📍 Location", value="New York City", placeholder="City, Country…")
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown(
+        '<div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.2rem">'
+        '🌤️ What to Wear</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div style="color:rgba(255,255,255,0.4);font-size:0.82rem;margin-bottom:1.5rem">'
+        'Dress smarter, not harder.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Live autocomplete location search ──────────────────────────────────────
+    st.markdown("📍 **Location**")
+    selected_location = st_searchbox(
+        search_locations,
+        key="location_searchbox",
+        placeholder="Start typing a city…",
+        label="Location",
+        clear_on_submit=False,
+        default="New York City, New York, United States",
+    )
 
     st.markdown('<div class="section-title">Outfit Check</div>', unsafe_allow_html=True)
     col_d, col_t = st.columns(2)
@@ -171,18 +247,15 @@ with st.sidebar:
         target_date = st.date_input("Date", value=datetime.date.today() + datetime.timedelta(days=1))
     with col_t:
         time_options = [
-            (datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M")).strftime("%-I:%M %p")
+            datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M").strftime("%-I:%M %p")
             for h in range(24)
-            for m in [0, 30]  # every 30 min (change to [0,15,30,45] if needed)
+            for m in [0, 30]
         ]
-    
-        selected_time_str = st.selectbox("Time", time_options, index=26)  # ~1:00 PM default
-    
-        # Convert back to datetime.time object for your logic
+        selected_time_str = st.selectbox("Time", time_options, index=26)
         target_time = datetime.datetime.strptime(selected_time_str, "%I:%M %p").time()
 
     units = st.radio("Temperature Units", ["°F", "°C"], horizontal=True)
-    
+
     st.markdown('<div class="section-title">Charts</div>', unsafe_allow_html=True)
     show_7day    = st.checkbox("7-Day Forecast",   value=True)
     show_24h     = st.checkbox("24-Hour Forecast", value=True)
@@ -190,25 +263,39 @@ with st.sidebar:
 
     go = st.button("🔍  Get My Outfit", use_container_width=True)
 
+
 # ── Main area ──────────────────────────────────────────────────────────────────
-st.markdown('<h1 style="font-family:Syne,sans-serif;font-weight:800;font-size:2.4rem;margin-bottom:0.1rem">Weather · Outfit Advisor</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color:rgba(255,255,255,0.45);margin-bottom:1.5rem">Enter your location and time, then see exactly what to wear.</p>', unsafe_allow_html=True)
+st.markdown(
+    '<h1 style="font-family:Syne,sans-serif;font-weight:800;font-size:2.4rem;margin-bottom:0.1rem">'
+    'Weather · Outfit Advisor</h1>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<p style="color:rgba(255,255,255,0.45);margin-bottom:1.5rem">'
+    'Enter your location and time, then see exactly what to wear.</p>',
+    unsafe_allow_html=True,
+)
 
 if not go:
     st.info("👈  Set your location and preferences in the sidebar, then hit **Get My Outfit**.")
     st.stop()
 
-# ── Geocode ────────────────────────────────────────────────────────────────────
-with st.spinner(f"Looking up **{location_input}**…"):
-    geo = geocode(location_input)
+# ── Validate location selection ────────────────────────────────────────────────
+if not selected_location:
+    st.error("📍 Please select a location from the search dropdown.")
+    st.stop()
+
+# ── Geocode the chosen location ────────────────────────────────────────────────
+with st.spinner(f"Looking up **{selected_location}**…"):
+    geo = geocode(selected_location)
 
 if not geo:
-    st.error("❌ Couldn't find that location. Try a different city name.")
+    st.error("❌ Couldn't resolve that location. Try selecting a different option from the dropdown.")
     st.stop()
 
 lat, lon, city_name, tz_str = geo
 
-# ── Fetch hourly data ──────────────────────────────────────────────────────────
+# ── Fetch weather ──────────────────────────────────────────────────────────────
 with st.spinner("Fetching weather data…"):
     data = fetch_weather(
         lat, lon, tz_str,
@@ -222,15 +309,15 @@ if not data:
     st.stop()
 
 # ── Parse hourly ───────────────────────────────────────────────────────────────
-hourly = data["hourly"]
-times  = [datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in hourly["time"]]
-temps_f  = [to_f(v) for v in hourly["temperature_2m"]]
-temps_c  = [round(v, 1) for v in hourly["temperature_2m"]]
-precips  = hourly["precipitation_probability"]
-winds    = [to_mph(w) for w in hourly["wind_speed_10m"]]
+hourly  = data["hourly"]
+times   = [datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in hourly["time"]]
+temps_f = [to_f(v) for v in hourly["temperature_2m"]]
+temps_c = [round(v, 1) for v in hourly["temperature_2m"]]
+precips = hourly["precipitation_probability"]
+winds   = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
 # ── Match target datetime ──────────────────────────────────────────────────────
-target_dt = datetime.datetime.combine(target_date, target_time).replace(minute=0, second=0, microsecond=0)
+target_dt       = datetime.datetime.combine(target_date, target_time).replace(minute=0, second=0, microsecond=0)
 available_dates = {t.date() for t in times}
 
 if target_date not in available_dates:
@@ -267,12 +354,12 @@ st.markdown(f"""
 # ── Metric row ─────────────────────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
 metrics = [
-    ("📍 Location", city_name, ""),
-    ("🌡️ Temperature", display_temp, ""),
-    ("🌧️ Rain Chance", f"{pr}%", "precipitation"),
-    ("💨 Wind", f"{wd} mph", ""),
+    ("📍 Location",    city_name,       ""),
+    ("🌡️ Temperature", display_temp,    ""),
+    ("🌧️ Rain Chance", f"{pr}%",        "precipitation"),
+    ("💨 Wind",        f"{wd} mph",     ""),
 ]
-for col, (lbl, val, _) in zip([c1,c2,c3,c4], metrics):
+for col, (lbl, val, _) in zip([c1, c2, c3, c4], metrics):
     with col:
         st.markdown(f"""
         <div class="metric-card">
@@ -285,7 +372,7 @@ st.markdown("")
 # ── 7-Day chart ────────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown('<div class="section-title">7-Day Forecast</div>', unsafe_allow_html=True)
-    daily = data["daily"]
+    daily  = data["daily"]
     d_dates = daily["time"]
     d_tmin  = [to_f(t) for t in daily["temperature_2m_min"]]
     d_tmax  = [to_f(t) for t in daily["temperature_2m_max"]]
@@ -293,8 +380,8 @@ if show_7day:
     d_wind  = [to_mph(w) for w in daily["wind_speed_10m_max"]]
 
     if units == "°C":
-        d_tmin = [round((v - 32)*5/9, 1) for v in d_tmin]
-        d_tmax = [round((v - 32)*5/9, 1) for v in d_tmax]
+        d_tmin = [round((v - 32) * 5/9, 1) for v in d_tmin]
+        d_tmax = [round((v - 32) * 5/9, 1) for v in d_tmax]
 
     days = [datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d") for d in d_dates]
 
@@ -344,7 +431,6 @@ if show_24h:
     ax3.set_ylabel(f"Temp ({units}) / Wind (mph)", color="#aaaacc")
     ax3.grid(True, alpha=0.4)
 
-    # x-tick thinning
     step = max(1, len(filt_t) // 12)
     ax3.set_xticks(range(0, len(filt_t), step))
     ax3.set_xticklabels(filt_t[::step], rotation=30, ha="right")
