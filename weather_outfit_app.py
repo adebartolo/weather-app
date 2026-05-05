@@ -101,9 +101,11 @@ GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 def geocode(location_name):
     """Return (lat, lon, display_name, timezone_str) or None."""
     try:
+        # Normalize: title-case each comma-separated part, strip whitespace
+        normalized = ", ".join(part.strip().title() for part in location_name.split(","))
         r = requests.get(
             GEOCODE_URL,
-            params={"q": location_name, "format": "json", "limit": 1},
+            params={"q": normalized, "format": "json", "limit": 1},
             headers={"User-Agent": "WeatherOutfitApp/1.0"},
             timeout=6,
         )
