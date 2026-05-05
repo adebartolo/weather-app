@@ -10,37 +10,66 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
-# ── STATE → DEFAULT CITY MAP (IMPORTANT FIX) ────────────────────────────────
+# ── 50 STATE → DEFAULT CITY MAP ─────────────────────────────────────────────
 STATE_CITY_MAP = {
-    "florida": ("Miami", "Florida"),
-    "fl": ("Miami", "Florida"),
-
-    "new york": ("New York City", "New York"),
-    "ny": ("New York City", "New York"),
-
-    "california": ("Los Angeles", "California"),
-    "ca": ("Los Angeles", "California"),
-
-    "texas": ("Houston", "Texas"),
-    "tx": ("Houston", "Texas"),
-
-    "illinois": ("Chicago", "Illinois"),
-    "il": ("Chicago", "Illinois"),
-
-    "washington": ("Seattle", "Washington"),
-    "wa": ("Seattle", "Washington"),
-
-    "colorado": ("Denver", "Colorado"),
-    "co": ("Denver", "Colorado"),
-
-    "georgia": ("Atlanta", "Georgia"),
-    "ga": ("Atlanta", "Georgia"),
-
-    "nevada": ("Las Vegas", "Nevada"),
-    "nv": ("Las Vegas", "Nevada"),
-
+    "alabama": ("Birmingham", "Alabama"),
+    "alaska": ("Anchorage", "Alaska"),
     "arizona": ("Phoenix", "Arizona"),
-    "az": ("Phoenix", "Arizona"),
+    "arkansas": ("Little Rock", "Arkansas"),
+    "california": ("Los Angeles", "California"),
+    "colorado": ("Denver", "Colorado"),
+    "connecticut": ("Hartford", "Connecticut"),
+    "delaware": ("Wilmington", "Delaware"),
+    "florida": ("Miami", "Florida"),
+    "georgia": ("Atlanta", "Georgia"),
+    "hawaii": ("Honolulu", "Hawaii"),
+    "idaho": ("Boise", "Idaho"),
+    "illinois": ("Chicago", "Illinois"),
+    "indiana": ("Indianapolis", "Indiana"),
+    "iowa": ("Des Moines", "Iowa"),
+    "kansas": ("Wichita", "Kansas"),
+    "kentucky": ("Louisville", "Kentucky"),
+    "louisiana": ("New Orleans", "Louisiana"),
+    "maine": ("Portland", "Maine"),
+    "maryland": ("Baltimore", "Maryland"),
+    "massachusetts": ("Boston", "Massachusetts"),
+    "michigan": ("Detroit", "Michigan"),
+    "minnesota": ("Minneapolis", "Minnesota"),
+    "mississippi": ("Jackson", "Mississippi"),
+    "missouri": ("Kansas City", "Missouri"),
+    "montana": ("Billings", "Montana"),
+    "nebraska": ("Omaha", "Nebraska"),
+    "nevada": ("Las Vegas", "Nevada"),
+    "new hampshire": ("Manchester", "New Hampshire"),
+    "new jersey": ("Newark", "New Jersey"),
+    "new mexico": ("Albuquerque", "New Mexico"),
+    "new york": ("New York City", "New York"),
+    "north carolina": ("Charlotte", "North Carolina"),
+    "north dakota": ("Fargo", "North Dakota"),
+    "ohio": ("Columbus", "Ohio"),
+    "oklahoma": ("Oklahoma City", "Oklahoma"),
+    "oregon": ("Portland", "Oregon"),
+    "pennsylvania": ("Philadelphia", "Pennsylvania"),
+    "rhode island": ("Providence", "Rhode Island"),
+    "south carolina": ("Charleston", "South Carolina"),
+    "south dakota": ("Sioux Falls", "South Dakota"),
+    "tennessee": ("Nashville", "Tennessee"),
+    "texas": ("Houston", "Texas"),
+    "utah": ("Salt Lake City", "Utah"),
+    "vermont": ("Burlington", "Vermont"),
+    "virginia": ("Virginia Beach", "Virginia"),
+    "washington": ("Seattle", "Washington"),
+    "west virginia": ("Charleston", "West Virginia"),
+    "wisconsin": ("Milwaukee", "Wisconsin"),
+    "wyoming": ("Cheyenne", "Wyoming"),
+}
+
+# abbreviations
+STATE_ABBR = {
+    "ny":"new york","ca":"california","fl":"florida","tx":"texas","nj":"new jersey",
+    "pa":"pennsylvania","ga":"georgia","nc":"north carolina","sc":"south carolina",
+    "va":"virginia","ma":"massachusetts","oh":"ohio","mi":"michigan","wa":"washington",
+    "or":"oregon","az":"arizona","nv":"nevada","co":"colorado","ut":"utah","il":"illinois"
 }
 
 # ── PAGE CONFIG ─────────────────────────────────────────────────────────────
@@ -51,7 +80,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── STYLE ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -100,19 +128,29 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE ──────────────────────────────────────────────────────────────────
+# ── GEOCODE (FIXED STATE LOGIC) ─────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     raw = location_name.strip().lower()
 
-    # ── STATE SHORTCUT HANDLING ─────────────────────────────
+    # --- STATE DETECTION ---
+    if raw in STATE_ABBR:
+        raw = STATE_ABBR[raw]
+
     if raw in STATE_CITY_MAP:
         city, state = STATE_CITY_MAP[raw]
         query = f"{city}, {state}, United States"
+    elif len(raw.split()) == 1:
+        # treat single word as possible state OR city
+        if raw in STATE_CITY_MAP:
+            city, state = STATE_CITY_MAP[raw]
+            query = f"{city}, {state}, United States"
+        else:
+            query = f"{raw}, United States"
     else:
-        query = f"{location_name}, United States"
+        query = location_name
 
     r = requests.get(
         url,
@@ -130,22 +168,20 @@ def geocode(location_name):
     us = [r for r in results if r.get("country") == "United States"]
     p = us[0] if us else results[0]
 
-    country = p.get("country", "United States")
     state = p.get("admin1")
 
     name_parts = [p["name"]]
     if state:
         name_parts.append(state)
-    name_parts.append(country)
+    name_parts.append("United States")
 
     return {
         "lat": p["latitude"],
         "lon": p["longitude"],
         "name": ", ".join(name_parts),
-        "state": state
     }
 
-# ── WEATHER ──────────────────────────────────────────────────────────────────
+# ── WEATHER ─────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon):
     url = (
@@ -157,9 +193,6 @@ def fetch_weather(lat, lon):
     )
 
     r = requests.get(url, timeout=10)
-    if r.status_code != 200:
-        return {"error": "API_LIMITED"}
-
     return r.json()
 
 # ── OUTFIT LOGIC ────────────────────────────────────────────────────────────
@@ -234,13 +267,8 @@ if "error" in geo:
     st.stop()
 
 lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
-state_name = geo.get("state")
 
 data = fetch_weather(lat, lon)
-
-if "error" in data:
-    st.error("❌ Weather API failed.")
-    st.stop()
 
 hourly = data["hourly"]
 daily = data["daily"]
@@ -254,12 +282,9 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-selected = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
+target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
-idx = min(
-    range(len(times)),
-    key=lambda i: abs((times[i] - selected).total_seconds())
-)
+idx = min(range(len(times)), key=lambda i: abs((times[i]-target).total_seconds()))
 
 tf, pr, wd = temps[idx], prec[idx], wind[idx]
 
@@ -269,82 +294,8 @@ st.subheader(f"{emoji} {title}")
 st.write(desc)
 
 st.metric("Location", city_name)
-if state_name:
-    st.caption(f"State: {state_name}")
-
 st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
-
-# ── 7 DAY ───────────────────────────────────────────────────────────────────
-if show_7day:
-    st.markdown("### 7-Day Forecast")
-
-    dmin = [to_f(x) for x in daily["temperature_2m_min"]]
-    dmax = [to_f(x) for x in daily["temperature_2m_max"]]
-    rain = daily["precipitation_probability_max"]
-    wind_d = [to_mph(x) for x in daily["wind_speed_10m_max"]]
-
-    days = [
-        datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
-        for d in daily["time"]
-    ]
-
-    fig, ax1 = plt.subplots(figsize=CHART_SIZE)
-
-    ax1.plot(days, dmin, label="Min Temp", color=ACCENT1)
-    ax1.plot(days, dmax, label="Max Temp", color=ACCENT2)
-    ax1.plot(days, wind_d, label="Wind", color=ACCENT3, linestyle="--")
-    ax1.fill_between(days, dmin, dmax, alpha=0.15)
-
-    ax2 = ax1.twinx()
-    ax2.bar(days, rain, alpha=0.3, color=ACCENT1, label="Rain %")
-
-    ax1.set_title(f"7-Day Forecast — {city_name}")
-    ax1.legend(loc="upper left")
-    ax2.legend(loc="upper right")
-
-    st.pyplot(fig)
-    plt.close(fig)
-
-# ── 24 HOUR ────────────────────────────────────────────────────────────────
-if show_24h:
-    st.markdown("### Next 24 Hours")
-
-    now = datetime.datetime.now(ET)
-
-    ft, fp, fw, ftmp = [], [], [], []
-
-    for i, t in enumerate(times):
-        if t < now:
-            continue
-        if len(ft) >= forecast_hrs:
-            break
-
-        ft.append(t.strftime("%-I %p"))
-        fp.append(prec[i])
-        fw.append(wind[i])
-        ftmp.append(temps[i])
-
-    fmin = [min(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
-    fmax = [max(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
-
-    fig2, ax = plt.subplots(figsize=CHART_SIZE)
-
-    ax.plot(ft, fmin, label="Min Temp", color=ACCENT1)
-    ax.plot(ft, fmax, label="Max Temp", color=ACCENT2)
-    ax.fill_between(ft, fmin, fmax, alpha=0.15)
-
-    ax.plot(ft, fw, label="Wind", color=ACCENT3, linestyle="--")
-
-    ax2 = ax.twinx()
-    ax2.bar(ft, fp, alpha=0.3, color=ACCENT1, label="Rain %")
-
-    ax.set_title(f"Next 24 Hours — {city_name}")
-    ax.legend(loc="upper left")
-    ax2.legend(loc="upper right")
-
-    st.pyplot(fig2)
-    plt.close(fig2)
 
 st.success("Done ✔")
