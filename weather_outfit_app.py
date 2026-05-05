@@ -127,7 +127,10 @@ def outfit_for(temp_f, precip, wind):
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
-    location = st.text_input("Location", "New York City")
+    location = st.text_input("Location", placeholder="Enter a city (e.g., New York City)")
+
+    if not location.strip():
+        location = "New York City"
 
     if st.button("⚡ Use NOW (ET)"):
         st.session_state.date = now_et.date()
