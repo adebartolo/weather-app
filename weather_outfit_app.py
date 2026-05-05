@@ -30,7 +30,7 @@ html, body, [class*="css"] {
 </style>
 """, unsafe_allow_html=True)
 
-st.info("🕒 All times are in **Eastern Time (ET)**. The 24-hour chart always uses CURRENT time.")
+st.info("🕒 All times are standardized to **Eastern Time (ET)**")
 
 # ── MATPLOTLIB THEME ───────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
@@ -53,12 +53,6 @@ CHART_SIZE = (13, 4)
 # ── HELPERS ────────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
-
-def to_et(dt):
-    """Make timezone consistent (ET-aware)."""
-    if dt.tzinfo is None:
-        return ET.localize(dt)
-    return dt.astimezone(ET)
 
 # ── GEOCODE ────────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
@@ -91,6 +85,7 @@ def fetch_weather(lat, lon):
         "&hourly=temperature_2m,precipitation_probability,wind_speed_10m"
         "&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
     )
+
     r = requests.get(url, timeout=10)
     return r.json()
 
@@ -120,18 +115,9 @@ with st.sidebar:
 
     now_pressed = st.button("⚡ Use NOW (ET)")
 
-    # session defaults
-    if "use_now" not in st.session_state:
-        st.session_state["use_now"] = False
-
     if now_pressed:
-        st.session_state["use_now"] = True
         st.session_state["date"] = now_et.date()
         st.session_state["time"] = now_et.replace(minute=0, second=0, microsecond=0).time()
-
-    # label showing mode
-    mode_label = "NOW (current ET time)" if st.session_state.get("use_now") else "Manual selection"
-    st.caption(f"Mode: {mode_label}")
 
     date = st.date_input(
         "Date (ET)",
@@ -146,7 +132,6 @@ with st.sidebar:
     time_obj = st.selectbox(
         "Time (ET)",
         times,
-        index=0,
         format_func=lambda t: t.strftime("%-I:%M %p"),
         key="time"
     )
@@ -154,7 +139,7 @@ with st.sidebar:
     units = st.radio("Units", ["°F", "°C"])
 
     show_7day = st.checkbox("7-Day Chart", True)
-    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME ONLY)", True)
+    show_24h = st.checkbox("24-Hour Chart (CURRENT TIME)", True)
 
     forecast_hrs = st.slider("Hours (max 24)", 6, 24, 24)
 
@@ -180,14 +165,18 @@ data = fetch_weather(lat, lon)
 
 hourly = data["hourly"]
 
-times = [to_et(datetime.datetime.fromisoformat(t)) for t in hourly["time"]]
+# ── FIX: ET conversion for ALL timestamps ──
+times = [
+    datetime.datetime.fromisoformat(t).replace(tzinfo=pytz.UTC).astimezone(ET)
+    for t in hourly["time"]
+]
+
 temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
 # ── SELECTED TIME ──────────────────────────────────────────────────────────────
-target = datetime.datetime.combine(date, time_obj)
-target = to_et(target)
+target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
 idx = min(
     range(len(times)),
@@ -222,8 +211,8 @@ if show_7day:
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
 
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min Temp")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max Temp")
+    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", label="Min")
+    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", label="Max")
     ax1.plot(days, d_wind, color=ACCENT3, linestyle="--", label="Wind")
     ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
 
@@ -231,10 +220,10 @@ if show_7day:
     ax1.grid(True, alpha=0.4)
 
     ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color="#ff6b6b", alpha=0.4)
+    ax2.bar(days, d_prec, color="#ff6b6b", alpha=0.45)
     ax2.set_ylabel("Precipitation % (rain likelihood)")
 
-    rain_patch = mpatches.Patch(color="#ff6b6b", alpha=0.4, label="Rain %")
+    rain_patch = mpatches.Patch(color="#ff6b6b", alpha=0.45, label="Rain %")
 
     ax1.legend(handles=[ax1.lines[0], ax1.lines[1], ax1.lines[2], rain_patch],
                loc="upper center", bbox_to_anchor=(0.5, -0.15), ncol=4)
@@ -243,20 +232,24 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24 HOUR (ALWAYS CURRENT TIME) ─────────────────────────────────────────────
+# ── 24 HOUR (FIXED START ALIGNMENT) ────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next 24 Hours (based on CURRENT ET time)")
+    st.markdown("### Next 24 Hours (starting NOW ET)")
 
-    now = to_et(datetime.datetime.now())
+    now = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
 
-    ft, fp, fw, ftmp = [], [], [], []
+    # find closest forecast index
+    start_idx = min(
+        range(len(times)),
+        key=lambda i: abs((times[i] - now).total_seconds())
+    )
 
-    for i, t in enumerate(times):
-        if t >= now and len(ft) < forecast_hrs:
-            ft.append(t.strftime("%-I %p"))
-            fp.append(prec[i])
-            fw.append(wind[i])
-            ftmp.append(temps[i])
+    end_idx = min(start_idx + forecast_hrs, len(times))
+
+    ft = [t.strftime("%-I %p") for t in times[start_idx:end_idx]]
+    fp = prec[start_idx:end_idx]
+    fw = wind[start_idx:end_idx]
+    ftmp = temps[start_idx:end_idx]
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -276,7 +269,7 @@ if show_24h:
     ax3.legend(handles=[ax3.lines[0], ax3.lines[1], rain_patch2],
                loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=3)
 
-    plt.title("Next 24 Hours Forecast (CURRENT TIME BASED)")
+    plt.title("Next 24 Hours Forecast (CURRENT ET TIME)")
     st.pyplot(fig2)
     plt.close(fig2)
 
