@@ -254,18 +254,24 @@ if show_7day:
 
 # ── 24-HOUR CHART ─────────────────────────────────────────────────────────────
 if show_24h:
-    st.markdown("### Next 24 Hours Forecast (ET, fixed window)")
+    st.markdown("### Next 24 Hours from NOW Forecast")
 
-    start_time = datetime.datetime.combine(date, time_obj)
+    # ALWAYS anchored to real current ET time
+    now_et = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        if t >= start_time and len(ft) < forecast_hrs:
+        # ignore user-selected date/time completely
+        if t >= now_et and len(ft) < forecast_hrs:
             ft.append(t.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
+
+    if len(ft) == 0:
+        st.warning("No forecast data available from current time window.")
+        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
@@ -289,7 +295,7 @@ if show_24h:
         ncol=3
     )
 
-    plt.title(f"Next 24 Hours — {city_name}")
+    plt.title(f"Next {forecast_hrs} Hours (from NOW ET) — {city_name}")
     st.pyplot(fig2)
     plt.close(fig2)
 
