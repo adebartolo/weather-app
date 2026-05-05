@@ -249,16 +249,25 @@ if show_7day:
 if show_24h:
     st.markdown("### Next 24 Hours Forecast (CURRENT ET TIME)")
 
+    # current time in ET (normalized to top of hour)
     now = datetime.datetime.now(ET).replace(minute=0, second=0, microsecond=0)
 
     ft, fp, fw, ftmp = [], [], [], []
 
     for i, t in enumerate(times):
-        if t >= now and len(ft) < forecast_hrs:
-            ft.append(t.strftime("%-I %p"))
+
+        # make API time "aware" in ET for safe comparison
+        t_et = ET.localize(t) if t.tzinfo is None else t.astimezone(ET)
+
+        if t_et >= now and len(ft) < forecast_hrs:
+            ft.append(t_et.strftime("%-I %p"))
             fp.append(prec[i])
             fw.append(wind[i])
             ftmp.append(temps[i])
+
+    if len(ft) == 0:
+        st.warning("No forecast data available for current time window.")
+        st.stop()
 
     fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
 
