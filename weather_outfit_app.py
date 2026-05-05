@@ -10,14 +10,37 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
-# ── STATE MAP ───────────────────────────────────────────────────────────────
-STATE_MAP = {
-    "ny": "New York", "nj": "New Jersey", "ca": "California", "fl": "Florida",
-    "tx": "Texas", "il": "Illinois", "pa": "Pennsylvania", "ga": "Georgia",
-    "nc": "North Carolina", "sc": "South Carolina", "va": "Virginia",
-    "ma": "Massachusetts", "oh": "Ohio", "mi": "Michigan",
-    "wa": "Washington", "or": "Oregon", "az": "Arizona", "nv": "Nevada",
-    "co": "Colorado", "ut": "Utah"
+# ── STATE → DEFAULT CITY MAP (IMPORTANT FIX) ────────────────────────────────
+STATE_CITY_MAP = {
+    "florida": ("Miami", "Florida"),
+    "fl": ("Miami", "Florida"),
+
+    "new york": ("New York City", "New York"),
+    "ny": ("New York City", "New York"),
+
+    "california": ("Los Angeles", "California"),
+    "ca": ("Los Angeles", "California"),
+
+    "texas": ("Houston", "Texas"),
+    "tx": ("Houston", "Texas"),
+
+    "illinois": ("Chicago", "Illinois"),
+    "il": ("Chicago", "Illinois"),
+
+    "washington": ("Seattle", "Washington"),
+    "wa": ("Seattle", "Washington"),
+
+    "colorado": ("Denver", "Colorado"),
+    "co": ("Denver", "Colorado"),
+
+    "georgia": ("Atlanta", "Georgia"),
+    "ga": ("Atlanta", "Georgia"),
+
+    "nevada": ("Las Vegas", "Nevada"),
+    "nv": ("Las Vegas", "Nevada"),
+
+    "arizona": ("Phoenix", "Arizona"),
+    "az": ("Phoenix", "Arizona"),
 }
 
 # ── PAGE CONFIG ─────────────────────────────────────────────────────────────
@@ -77,20 +100,19 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (FIXED STATE + US PRIORITY) ─────────────────────────────────────
+# ── GEOCODE ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     raw = location_name.strip().lower()
 
-    # expand state abbreviations
-    if raw in STATE_MAP:
-        raw = STATE_MAP[raw]
-
-    # assume US for single-word input
-    is_single = len(raw.split()) == 1
-    query = f"{raw}, United States" if is_single else raw
+    # ── STATE SHORTCUT HANDLING ─────────────────────────────
+    if raw in STATE_CITY_MAP:
+        city, state = STATE_CITY_MAP[raw]
+        query = f"{city}, {state}, United States"
+    else:
+        query = f"{location_name}, United States"
 
     r = requests.get(
         url,
@@ -105,14 +127,8 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
-    # prioritize US results
     us = [r for r in results if r.get("country") == "United States"]
-    candidates = us if us else results
-
-    # prefer entries with state info
-    candidates.sort(key=lambda x: 1 if x.get("admin1") else 0, reverse=True)
-
-    p = candidates[0]
+    p = us[0] if us else results[0]
 
     country = p.get("country", "United States")
     state = p.get("admin1")
@@ -126,10 +142,10 @@ def geocode(location_name):
         "lat": p["latitude"],
         "lon": p["longitude"],
         "name": ", ".join(name_parts),
-        "state": state,
+        "state": state
     }
 
-# ── WEATHER ─────────────────────────────────────────────────────────────────
+# ── WEATHER ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon):
     url = (
@@ -238,28 +254,14 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── SELECT TIME ────────────────────────────────────────────────────────────
 selected = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
-is_today = date == now_et.date()
 
-if is_today:
-    idx = min(range(len(times)), key=lambda i: abs((times[i] - selected).total_seconds()))
-    tf = temps[idx]
-    pr = prec[idx]
-    wd = wind[idx]
-    temp_label = f"{tf}°F"
-else:
-    day_idx = min((selected.date() - now_et.date()).days,
-                  len(daily["temperature_2m_min"]) - 1)
+idx = min(
+    range(len(times)),
+    key=lambda i: abs((times[i] - selected).total_seconds())
+)
 
-    tmin = to_f(daily["temperature_2m_min"][day_idx])
-    tmax = to_f(daily["temperature_2m_max"][day_idx])
-
-    tf = (tmin + tmax) / 2
-    pr = daily["precipitation_probability_max"][day_idx]
-    wd = to_mph(daily["wind_speed_10m_max"][day_idx])
-
-    temp_label = f"{tmin}°F – {tmax}°F"
+tf, pr, wd = temps[idx], prec[idx], wind[idx]
 
 emoji, title, desc = outfit_for(tf, pr, wd)
 
@@ -269,7 +271,8 @@ st.write(desc)
 st.metric("Location", city_name)
 if state_name:
     st.caption(f"State: {state_name}")
-st.metric("Temp", temp_label)
+
+st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
