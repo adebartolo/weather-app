@@ -67,14 +67,18 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE ──────────────────────────────────────────────────────────────────
+# ── GEOCODE (FIXED: US PRIORITY + SAFE FALLBACK) ─────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     r = requests.get(
         url,
-        params={"name": location_name, "count": 1, "language": "en"},
+        params={
+            "name": location_name,
+            "count": 10,   # get multiple candidates
+            "language": "en"
+        },
         timeout=8
     )
 
@@ -82,12 +86,19 @@ def geocode(location_name):
         return {"error": "API_LIMITED"}
 
     data = r.json()
-    if "results" not in data:
+    results = data.get("results", [])
+
+    if not results:
         return {"error": "NOT_FOUND"}
 
-    p = data["results"][0]
+    # ✅ PRIORITY: United States first
+    us_match = next(
+        (r for r in results if r.get("country") == "United States"),
+        None
+    )
 
-    # ✅ FIX: default country fallback
+    p = us_match if us_match else results[0]
+
     country = p.get("country")
     if not country or country.strip() == "":
         country = "United States"
@@ -228,7 +239,7 @@ st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY ───────────────────────────────────────────────────────────────────
+# ── 7-DAY CHART ─────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -258,7 +269,7 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24 HOUR ─────────────────────────────────────────────────────────────────
+# ── 24 HOUR CHART ───────────────────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours (Always ET)")
 
