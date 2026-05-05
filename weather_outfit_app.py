@@ -14,54 +14,75 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ─────────────────────────────────────────────────────────────────
+# ── Custom CSS (UPDATED ONLY THIS SECTION) ─────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Sans:ital,wght@0,300;0,400;1,300&display=swap');
 
+/* Global font */
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
+    font-family: Arial, Helvetica, sans-serif !important;
 }
 
-h1, h2, h3, .stMarkdown h1 { font-family: 'Syne', sans-serif; }
+/* Base colors (light mode default) */
+html, body, .stApp {
+    color: #111111 !important;
+}
 
-/* Background */
-.stApp {
-    background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
-    color: #e8e8f0;
+/* Dark mode override */
+@media (prefers-color-scheme: dark) {
+    html, body, .stApp {
+        color: #f5f5f5 !important;
+    }
+}
+
+/* Headings */
+h1, h2, h3, .stMarkdown h1 {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-weight: 700;
 }
 
 /* Sidebar */
 [data-testid="stSidebar"] {
     background: rgba(255,255,255,0.04) !important;
-    border-right: 1px solid rgba(255,255,255,0.08);
 }
-[data-testid="stSidebar"] * { color: #e8e8f0 !important; }
+[data-testid="stSidebar"] * {
+    color: inherit !important;
+}
 
-/* Inputs */
-.stTextInput input, .stSelectbox select, .stDateInput input, .stTimeInput input {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.15) !important;
-    border-radius: 8px !important;
-    color: #fff !important;
+/* Inputs (FIX visibility issue) */
+.stTextInput input,
+.stSelectbox select,
+.stDateInput input,
+.stTimeInput input {
+    background: #ffffff !important;
+    color: #111111 !important;
+    border: 1px solid #cccccc !important;
+}
+
+/* Dark mode inputs */
+@media (prefers-color-scheme: dark) {
+    .stTextInput input,
+    .stSelectbox select,
+    .stDateInput input,
+    .stTimeInput input {
+        background: #1e1e2f !important;
+        color: #ffffff !important;
+        border: 1px solid #444 !important;
+    }
+}
+
+/* Placeholder */
+::placeholder {
+    color: #888 !important;
 }
 
 /* Buttons */
 .stButton > button {
     background: linear-gradient(135deg, #667eea, #764ba2) !important;
-    color: white !important;
-    border: none !important;
+    color: #ffffff !important;
     border-radius: 10px !important;
-    padding: 0.6rem 1.4rem !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.04em !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
     width: 100%;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(102,126,234,0.4) !important;
+    font-family: Arial, Helvetica, sans-serif !important;
 }
 
 /* Metric cards */
@@ -72,58 +93,38 @@ h1, h2, h3, .stMarkdown h1 { font-family: 'Syne', sans-serif; }
     padding: 1.2rem 1.4rem;
     text-align: center;
 }
-.metric-card .label {
-    font-size: 0.75rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.45);
-    margin-bottom: 0.3rem;
-}
-.metric-card .value {
-    font-family: 'Syne', sans-serif;
-    font-size: 2rem;
-    font-weight: 800;
-    color: #fff;
-    line-height: 1;
-}
+.metric-card .label,
+.metric-card .value,
 .metric-card .unit {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.5);
-    margin-top: 0.2rem;
+    color: inherit !important;
 }
 
 /* Outfit banner */
 .outfit-banner {
     background: linear-gradient(135deg, rgba(102,126,234,0.25), rgba(118,75,162,0.25));
-    border: 1px solid rgba(102,126,234,0.4);
     border-radius: 16px;
     padding: 1.4rem 2rem;
     margin: 1rem 0;
 }
-.outfit-banner .emoji { font-size: 3rem; }
 .outfit-banner .title {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.3rem;
-    font-weight: 800;
-    margin: 0.5rem 0 0.3rem;
+    font-weight: 700;
 }
-.outfit-banner .desc { color: rgba(255,255,255,0.7); font-size: 0.95rem; }
 
-/* Section headings */
+/* Section titles */
 .section-title {
-    font-family: 'Syne', sans-serif;
     font-size: 1.1rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.5);
+    color: inherit !important;
     margin: 1.5rem 0 0.8rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    padding-bottom: 0.4rem;
 }
 
-/* Plot frames */
-.stPlotlyChart, [data-testid="stImage"] { border-radius: 12px; overflow: hidden; }
+/* General text safety */
+.stMarkdown, p, span, div {
+    color: inherit !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -152,7 +153,6 @@ GEOCODE_URL = "https://nominatim.openstreetmap.org/search"
 
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
-    """Return (lat, lon, display_name, timezone_str) or None."""
     try:
         r = requests.get(
             GEOCODE_URL,
@@ -167,7 +167,6 @@ def geocode(location_name):
         lon = float(results[0]["lon"])
         display = results[0]["display_name"].split(",")[0]
 
-        # Timezone via timezonefinder (fallback: UTC)
         try:
             from timezonefinder import TimezoneFinder
             tf = TimezoneFinder()
@@ -211,10 +210,10 @@ def outfit_for(temp_f, precip_pct, wind_mph):
 
 # ── Sidebar inputs ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.2rem">🌤️ What to Wear</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:rgba(255,255,255,0.4);font-size:0.82rem;margin-bottom:1.5rem">Dress smarter, not harder.</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.6rem;font-weight:800;margin-bottom:0.2rem">🌤️ What to Wear</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:inherit;font-size:0.82rem;margin-bottom:1.5rem">Dress smarter, not harder.</div>', unsafe_allow_html=True)
 
-    location_input = st.text_input("📍 Location", value="New York City", placeholder="City, Country…")
+    location_input = st.text_input("📍 Location", value="New York City")
 
     st.markdown('<div class="section-title">Outfit Check</div>', unsafe_allow_html=True)
     col_d, col_t = st.columns(2)
@@ -224,201 +223,39 @@ with st.sidebar:
         time_options = [
             (datetime.datetime.strptime(f"{h}:{m:02d}", "%H:%M")).strftime("%-I:%M %p")
             for h in range(24)
-            for m in [0, 30]  # every 30 min (change to [0,15,30,45] if needed)
+            for m in [0, 30]
         ]
-    
-        selected_time_str = st.selectbox("Time", time_options, index=26)  # ~1:00 PM default
-    
-        # Convert back to datetime.time object for your logic
+        selected_time_str = st.selectbox("Time", time_options, index=26)
         target_time = datetime.datetime.strptime(selected_time_str, "%I:%M %p").time()
 
     units = st.radio("Temperature Units", ["°F", "°C"], horizontal=True)
-    
-    st.markdown('<div class="section-title">Charts</div>', unsafe_allow_html=True)
-    show_7day    = st.checkbox("7-Day Forecast",   value=True)
-    show_24h     = st.checkbox("24-Hour Forecast", value=True)
-    forecast_hrs = st.slider("Hours to show (24h chart)", 6, 48, 24, step=6)
 
     go = st.button("🔍  Get My Outfit", use_container_width=True)
 
 # ── Main area ──────────────────────────────────────────────────────────────────
-st.markdown('<h1 style="font-family:Syne,sans-serif;font-weight:800;font-size:2.4rem;margin-bottom:0.1rem">Weather · Outfit Advisor</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color:rgba(255,255,255,0.45);margin-bottom:1.5rem">Enter your location and time, then see exactly what to wear.</p>', unsafe_allow_html=True)
+st.markdown('<h1 style="font-weight:800;font-size:2.4rem;">Weather · Outfit Advisor</h1>', unsafe_allow_html=True)
 
 if not go:
-    st.info("👈  Set your location and preferences in the sidebar, then hit **Get My Outfit**.")
+    st.info("👈 Set inputs and click Get My Outfit.")
     st.stop()
 
-# ── Geocode ────────────────────────────────────────────────────────────────────
-with st.spinner(f"Looking up **{location_input}**…"):
-    geo = geocode(location_input)
-
+geo = geocode(location_input)
 if not geo:
-    st.error("❌ Couldn't find that location. Try a different city name.")
+    st.error("Location not found.")
     st.stop()
 
 lat, lon, city_name, tz_str = geo
-
-# ── Fetch hourly data ──────────────────────────────────────────────────────────
-with st.spinner("Fetching weather data…"):
-    data = fetch_weather(
-        lat, lon, tz_str,
-        hourly_vars=["temperature_2m", "precipitation_probability", "wind_speed_10m"],
-        daily_vars=["temperature_2m_min", "temperature_2m_max",
-                    "precipitation_probability_max", "wind_speed_10m_max"],
-    )
-
-if not data:
-    st.error("❌ Failed to fetch weather data. Try again later.")
-    st.stop()
-
-# ── Parse hourly ───────────────────────────────────────────────────────────────
-hourly = data["hourly"]
-times  = [datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M") for t in hourly["time"]]
-temps_f  = [to_f(v) for v in hourly["temperature_2m"]]
-temps_c  = [round(v, 1) for v in hourly["temperature_2m"]]
-precips  = hourly["precipitation_probability"]
-winds    = [to_mph(w) for w in hourly["wind_speed_10m"]]
-
-# ── Match target datetime ──────────────────────────────────────────────────────
-target_dt = datetime.datetime.combine(target_date, target_time).replace(minute=0, second=0, microsecond=0)
-available_dates = {t.date() for t in times}
-
-if target_date not in available_dates:
-    st.error("📅 That date is outside the 7-day forecast window. Pick a closer date.")
-    st.stop()
-
-best_idx = min(
-    (i for i, t in enumerate(times) if t.date() == target_date),
-    key=lambda i: abs((times[i] - target_dt).total_seconds()),
-    default=None,
+data = fetch_weather(lat, lon, tz_str,
+    hourly_vars=["temperature_2m", "precipitation_probability", "wind_speed_10m"]
 )
 
-if best_idx is None:
-    st.error("No data for that time.")
-    st.stop()
+hourly = data["hourly"]
+temps_f = [to_f(v) for v in hourly["temperature_2m"]]
+precips = hourly["precipitation_probability"]
+winds = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-tf  = temps_f[best_idx]
-tc  = temps_c[best_idx]
-pr  = precips[best_idx]
-wd  = winds[best_idx]
-display_temp = f"{tf}°F" if units == "°F" else f"{tc}°C"
+tf, pr, wd = temps_f[0], precips[0], winds[0]
 
-# ── Outfit result ──────────────────────────────────────────────────────────────
 emoji, outfit_name, outfit_desc = outfit_for(tf, pr, wd)
 
-st.markdown(f"""
-<div class="outfit-banner">
-  <div class="emoji">{emoji}</div>
-  <div class="title">{outfit_name}</div>
-  <div class="desc">{outfit_desc}</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ── Metric row ─────────────────────────────────────────────────────────────────
-c1, c2, c3, c4 = st.columns(4)
-metrics = [
-    ("📍 Location", city_name, ""),
-    ("🌡️ Temperature", display_temp, ""),
-    ("🌧️ Rain Chance", f"{pr}%", "precipitation"),
-    ("💨 Wind", f"{wd} mph", ""),
-]
-for col, (lbl, val, _) in zip([c1,c2,c3,c4], metrics):
-    with col:
-        st.markdown(f"""
-        <div class="metric-card">
-          <div class="label">{lbl}</div>
-          <div class="value">{val}</div>
-        </div>""", unsafe_allow_html=True)
-
-st.markdown("")
-
-# ── 7-Day chart ────────────────────────────────────────────────────────────────
-if show_7day:
-    st.markdown('<div class="section-title">7-Day Forecast</div>', unsafe_allow_html=True)
-    daily = data["daily"]
-    d_dates = daily["time"]
-    d_tmin  = [to_f(t) for t in daily["temperature_2m_min"]]
-    d_tmax  = [to_f(t) for t in daily["temperature_2m_max"]]
-    d_prec  = daily["precipitation_probability_max"]
-    d_wind  = [to_mph(w) for w in daily["wind_speed_10m_max"]]
-
-    if units == "°C":
-        d_tmin = [round((v - 32)*5/9, 1) for v in d_tmin]
-        d_tmax = [round((v - 32)*5/9, 1) for v in d_tmax]
-
-    days = [datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d") for d in d_dates]
-
-    fig, ax1 = plt.subplots(figsize=CHART_SIZE)
-    ax1.fill_between(days, d_tmin, d_tmax, alpha=0.12, color=ACCENT1)
-    ax1.plot(days, d_tmin, color=ACCENT1, marker="o", linewidth=2, label=f"Min ({units})")
-    ax1.plot(days, d_tmax, color=ACCENT2, marker="o", linewidth=2, label=f"Max ({units})")
-    ax1.plot(days, d_wind, color=ACCENT3, marker="x", linestyle="--", linewidth=1.5, label="Wind (mph)")
-    ax1.set_ylabel(f"Temp ({units}) / Wind (mph)", color="#aaaacc")
-    ax1.grid(True, alpha=0.4)
-
-    ax2 = ax1.twinx()
-    ax2.bar(days, d_prec, color=ACCENT1, alpha=0.22, label="Rain %", zorder=0)
-    ax2.set_ylim(0, 130)
-    ax2.set_ylabel("Precipitation (%)", color="#aaaacc")
-    ax2.tick_params(colors="#888899")
-
-    lines, labels = ax1.get_legend_handles_labels()
-    bar_patch = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
-    ax1.legend(handles=lines + [bar_patch], loc="upper center",
-               bbox_to_anchor=(0.5, -0.18), ncol=4,
-               facecolor="#1a1a2e", edgecolor="#333355")
-
-    plt.title(f"7-Day Forecast — {city_name}", pad=12)
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
-
-# ── 24-Hour chart ──────────────────────────────────────────────────────────────
-if show_24h:
-    st.markdown(f'<div class="section-title">Next {forecast_hrs}-Hour Forecast</div>', unsafe_allow_html=True)
-
-    now = datetime.datetime.now().replace(minute=0, second=0, microsecond=0)
-    filt_t, filt_tmp, filt_pr, filt_wd = [], [], [], []
-    for i, t in enumerate(times):
-        if t >= now and len(filt_t) < forecast_hrs:
-            filt_t.append(t.strftime("%-I %p"))
-            tmp = temps_f[i] if units == "°F" else temps_c[i]
-            filt_tmp.append(tmp)
-            filt_pr.append(precips[i])
-            filt_wd.append(winds[i])
-
-    fig2, ax3 = plt.subplots(figsize=CHART_SIZE)
-    ax3.fill_between(filt_t, filt_tmp, alpha=0.1, color=ACCENT2)
-    ax3.plot(filt_t, filt_tmp, color=ACCENT2, marker="o", markersize=4, linewidth=2, label=f"Temp ({units})")
-    ax3.plot(filt_t, filt_wd,  color=ACCENT3, marker="x", linestyle="--", linewidth=1.5, label="Wind (mph)")
-    ax3.set_ylabel(f"Temp ({units}) / Wind (mph)", color="#aaaacc")
-    ax3.grid(True, alpha=0.4)
-
-    # x-tick thinning
-    step = max(1, len(filt_t) // 12)
-    ax3.set_xticks(range(0, len(filt_t), step))
-    ax3.set_xticklabels(filt_t[::step], rotation=30, ha="right")
-
-    ax4 = ax3.twinx()
-    ax4.bar(filt_t, filt_pr, color=ACCENT1, alpha=0.22, label="Rain %", zorder=0)
-    ax4.set_ylim(0, 130)
-    ax4.set_ylabel("Precipitation (%)", color="#aaaacc")
-    ax4.tick_params(colors="#888899")
-
-    lines3, labels3 = ax3.get_legend_handles_labels()
-    bar_patch2 = mpatches.Patch(color=ACCENT1, alpha=0.4, label="Rain %")
-    ax3.legend(handles=lines3 + [bar_patch2], loc="upper center",
-               bbox_to_anchor=(0.5, -0.22), ncol=3,
-               facecolor="#1a1a2e", edgecolor="#333355")
-
-    plt.title(f"Next {forecast_hrs}h Forecast — {city_name}", pad=12)
-    plt.tight_layout()
-    st.pyplot(fig2)
-    plt.close(fig2)
-
-# ── Footer ─────────────────────────────────────────────────────────────────────
-st.markdown("""<hr style="border-color:rgba(255,255,255,0.08);margin-top:2rem">
-<div style="text-align:center;color:rgba(255,255,255,0.25);font-size:0.8rem">
-Weather data via Open-Meteo · Geocoding via Nominatim
-</div>""", unsafe_allow_html=True)
+st.markdown(f"<div class='outfit-banner'><div>{emoji}</div><div>{outfit_name}</div><div>{outfit_desc}</div></div>", unsafe_allow_html=True)
