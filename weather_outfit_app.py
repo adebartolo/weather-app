@@ -17,169 +17,60 @@ st.set_page_config(
 # ── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-/* ── Font stack: Arial with robust fallbacks ── */
-html, body, [class*="css"],
-.stApp, .stMarkdown, .stText,
-input, select, textarea, button,
-.stTextInput input,
-.stSelectbox select,
-.stDateInput input,
-.stTimeInput input,
-.stRadio label,
-.stCheckbox label,
-.stSlider label {
-    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
+
+/* Font consistency */
+html, body, [class*="css"] {
+    font-family: Arial, Helvetica, sans-serif !important;
 }
 
-h1, h2, h3,
-.stMarkdown h1,
-.stMarkdown h2,
-.stMarkdown h3,
-.outfit-banner .title,
-.section-title,
-.metric-card .value {
-    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
-    font-weight: 800 !important;
-}
-
-/* Background */
+/* Keep your dark gradient */
 .stApp {
     background: linear-gradient(135deg, #0f0c29 0%, #1a1a2e 50%, #16213e 100%);
-    color: #e8e8f0;
+}
+
+/* Ensure readable default text */
+html, body, .stApp {
+    color: #e8e8f0 !important;
 }
 
 /* Sidebar */
-[data-testid="stSidebar"] {
-    background: rgba(255,255,255,0.04) !important;
-    border-right: 1px solid rgba(255,255,255,0.08);
+[data-testid="stSidebar"] * {
+    color: #e8e8f0 !important;
 }
-[data-testid="stSidebar"] * { color: #e8e8f0 !important; }
 
-/* ── Inputs: force visible text in ALL browser/OS color-scheme modes ── */
+/* FIX: Inputs always visible */
 .stTextInput input,
 .stSelectbox select,
 .stDateInput input,
 .stTimeInput input {
-    background: rgba(30, 30, 60, 0.85) !important;
-    border: 1px solid rgba(255,255,255,0.25) !important;
-    border-radius: 8px !important;
-    /* Hard-coded colors so browser dark-mode overrides can't wash them out */
+    background: rgba(255,255,255,0.08) !important;
     color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    caret-color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.25) !important;
 }
 
 /* Placeholder text */
-.stTextInput input::placeholder,
-.stTextInput input::-webkit-input-placeholder {
-    color: rgba(255,255,255,0.45) !important;
-    -webkit-text-fill-color: rgba(255,255,255,0.45) !important;
-}
-
-/* Selectbox dropdown options (rendered by browser, limited control) */
-.stSelectbox select option {
-    background: #1a1a2e;
-    color: #ffffff;
-}
-
-/* Focused state */
-.stTextInput input:focus,
-.stSelectbox select:focus,
-.stDateInput input:focus {
-    border-color: rgba(102,126,234,0.7) !important;
-    outline: none !important;
-    box-shadow: 0 0 0 2px rgba(102,126,234,0.25) !important;
+::placeholder {
+    color: rgba(255,255,255,0.6) !important;
 }
 
 /* Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+    font-family: Arial, Helvetica, sans-serif !important;
     color: #ffffff !important;
-    -webkit-text-fill-color: #ffffff !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 0.6rem 1.4rem !important;
-    font-family: Arial, "Helvetica Neue", Helvetica, sans-serif !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.04em !important;
-    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
-    width: 100%;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(102,126,234,0.4) !important;
 }
 
-/* Metric cards */
-.metric-card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 14px;
-    padding: 1.2rem 1.4rem;
-    text-align: center;
+/* Prevent invisible text anywhere */
+.stMarkdown, p, span, div, label {
+    color: inherit !important;
 }
-.metric-card .label {
-    font-size: 0.75rem;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.55);
-    margin-bottom: 0.3rem;
-}
-.metric-card .value {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #ffffff;
-    -webkit-text-fill-color: #ffffff;
-    line-height: 1;
-}
+
+/* Metric cards safety */
+.metric-card .label,
+.metric-card .value,
 .metric-card .unit {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.5);
-    margin-top: 0.2rem;
+    color: #ffffff !important;
 }
 
-/* Outfit banner */
-.outfit-banner {
-    background: linear-gradient(135deg, rgba(102,126,234,0.25), rgba(118,75,162,0.25));
-    border: 1px solid rgba(102,126,234,0.4);
-    border-radius: 16px;
-    padding: 1.4rem 2rem;
-    margin: 1rem 0;
-}
-.outfit-banner .emoji { font-size: 3rem; }
-.outfit-banner .title {
-    font-size: 1.3rem;
-    font-weight: 800;
-    color: #ffffff;
-    -webkit-text-fill-color: #ffffff;
-    margin: 0.5rem 0 0.3rem;
-}
-.outfit-banner .desc {
-    color: rgba(255,255,255,0.75);
-    -webkit-text-fill-color: rgba(255,255,255,0.75);
-    font-size: 0.95rem;
-}
-
-/* Section headings */
-.section-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: rgba(255,255,255,0.6);
-    -webkit-text-fill-color: rgba(255,255,255,0.6);
-    margin: 1.5rem 0 0.8rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    padding-bottom: 0.4rem;
-}
-
-/* Plot frames */
-.stPlotlyChart, [data-testid="stImage"] { border-radius: 12px; overflow: hidden; }
-
-/* ── Force-override browser color-scheme auto-adjustments on all text ── */
-.stApp * {
-    color-scheme: dark !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -267,8 +158,8 @@ def outfit_for(temp_f, precip_pct, wind_mph):
 
 # ── Sidebar inputs ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown('<div style="font-family:Arial,Helvetica,sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.2rem;color:#ffffff;-webkit-text-fill-color:#ffffff">🌤️ What to Wear</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:rgba(255,255,255,0.5);font-size:0.82rem;margin-bottom:1.5rem;-webkit-text-fill-color:rgba(255,255,255,0.5)">Dress smarter, not harder.</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;margin-bottom:0.2rem">🌤️ What to Wear</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:rgba(255,255,255,0.4);font-size:0.82rem;margin-bottom:1.5rem">Dress smarter, not harder.</div>', unsafe_allow_html=True)
 
     location_input = st.text_input("📍 Location", value="New York City", placeholder="City, Country…")
 
@@ -298,8 +189,8 @@ with st.sidebar:
     go = st.button("🔍  Get My Outfit", use_container_width=True)
 
 # ── Main area ──────────────────────────────────────────────────────────────────
-st.markdown('<h1 style="font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:2.4rem;margin-bottom:0.1rem;color:#ffffff;-webkit-text-fill-color:#ffffff">Weather · Outfit Advisor</h1>', unsafe_allow_html=True)
-st.markdown('<p style="color:rgba(255,255,255,0.5);margin-bottom:1.5rem;-webkit-text-fill-color:rgba(255,255,255,0.5)">Enter your location and time, then see exactly what to wear.</p>', unsafe_allow_html=True)
+st.markdown('<h1 style="font-family:Syne,sans-serif;font-weight:800;font-size:2.4rem;margin-bottom:0.1rem">Weather · Outfit Advisor</h1>', unsafe_allow_html=True)
+st.markdown('<p style="color:rgba(255,255,255,0.45);margin-bottom:1.5rem">Enter your location and time, then see exactly what to wear.</p>', unsafe_allow_html=True)
 
 if not go:
     st.info("👈  Set your location and preferences in the sidebar, then hit **Get My Outfit**.")
@@ -475,6 +366,6 @@ if show_24h:
 
 # ── Footer ─────────────────────────────────────────────────────────────────────
 st.markdown("""<hr style="border-color:rgba(255,255,255,0.08);margin-top:2rem">
-<div style="text-align:center;color:rgba(255,255,255,0.3);-webkit-text-fill-color:rgba(255,255,255,0.3);font-size:0.8rem">
+<div style="text-align:center;color:rgba(255,255,255,0.25);font-size:0.8rem">
 Weather data via Open-Meteo · Geocoding via Nominatim
 </div>""", unsafe_allow_html=True)
