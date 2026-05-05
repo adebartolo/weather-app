@@ -101,13 +101,13 @@ def fetch_weather(lat, lon, tz):
 # ── OUTFIT LOGIC ───────────────────────────────────────────────────────────────
 def outfit_for(temp_f, precip, wind):
     if temp_f < 32:
-        return "🧥", "Heavy Coat", "Freezing cold"
+        return "🥶", "Heavy Coat", "Freezing cold"
     if temp_f < 45:
-        return "🧥", "Winter Jacket", "Very cold"
+        return "🧣", "Winter Jacket", "Very cold"
     if temp_f < 60:
         return "🧥", "Light Jacket / Hoodie", "Cool weather"
     if temp_f < 70:
-        return "👕", "Long Sleeve Shirt", "Mild & comfortable"
+        return "🥼", "Long Sleeve Shirt", "Mild & comfortable"
     if precip > 60:
         return "☂️", "Umbrella Needed", "Rain expected"
     if wind > 20:
