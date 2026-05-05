@@ -10,7 +10,7 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
-# ── STATE MAP (smart resolution) ────────────────────────────────────────────
+# ── STATE MAP ───────────────────────────────────────────────────────────────
 STATE_MAP = {
     "ny": "New York", "nj": "New Jersey", "ca": "California", "fl": "Florida",
     "tx": "Texas", "il": "Illinois", "pa": "Pennsylvania", "ga": "Georgia",
@@ -77,16 +77,18 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODER (FIXED + STATE + US PRIORITY) ──────────────────────────────────
+# ── GEOCODE (FIXED STATE + US PRIORITY) ─────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     raw = location_name.strip().lower()
 
+    # expand state abbreviations
     if raw in STATE_MAP:
         raw = STATE_MAP[raw]
 
+    # assume US for single-word input
     is_single = len(raw.split()) == 1
     query = f"{raw}, United States" if is_single else raw
 
@@ -103,9 +105,14 @@ def geocode(location_name):
     if not results:
         return {"error": "NOT_FOUND"}
 
+    # prioritize US results
     us = [r for r in results if r.get("country") == "United States"]
+    candidates = us if us else results
 
-    p = us[0] if us else results[0]
+    # prefer entries with state info
+    candidates.sort(key=lambda x: 1 if x.get("admin1") else 0, reverse=True)
+
+    p = candidates[0]
 
     country = p.get("country", "United States")
     state = p.get("admin1")
@@ -119,6 +126,7 @@ def geocode(location_name):
         "lat": p["latitude"],
         "lon": p["longitude"],
         "name": ", ".join(name_parts),
+        "state": state,
     }
 
 # ── WEATHER ─────────────────────────────────────────────────────────────────
@@ -210,6 +218,7 @@ if "error" in geo:
     st.stop()
 
 lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
+state_name = geo.get("state")
 
 data = fetch_weather(lat, lon)
 
@@ -229,7 +238,7 @@ temps = [to_f(v) for v in hourly["temperature_2m"]]
 prec = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
-# ── CURRENT / FUTURE LOGIC ────────────────────────────────────────────────
+# ── SELECT TIME ────────────────────────────────────────────────────────────
 selected = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 is_today = date == now_et.date()
 
@@ -240,7 +249,8 @@ if is_today:
     wd = wind[idx]
     temp_label = f"{tf}°F"
 else:
-    day_idx = min((selected.date() - now_et.date()).days, len(daily["temperature_2m_min"]) - 1)
+    day_idx = min((selected.date() - now_et.date()).days,
+                  len(daily["temperature_2m_min"]) - 1)
 
     tmin = to_f(daily["temperature_2m_min"][day_idx])
     tmax = to_f(daily["temperature_2m_max"][day_idx])
@@ -257,11 +267,13 @@ st.subheader(f"{emoji} {title}")
 st.write(desc)
 
 st.metric("Location", city_name)
+if state_name:
+    st.caption(f"State: {state_name}")
 st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7 DAY CHART ────────────────────────────────────────────────────────────
+# ── 7 DAY ───────────────────────────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -292,7 +304,7 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24 HOUR CHART ───────────────────────────────────────────────────────────
+# ── 24 HOUR ────────────────────────────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours")
 
@@ -311,7 +323,6 @@ if show_24h:
         fw.append(wind[i])
         ftmp.append(temps[i])
 
-    # rolling min/max
     fmin = [min(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
     fmax = [max(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
 
