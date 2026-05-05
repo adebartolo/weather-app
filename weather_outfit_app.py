@@ -12,64 +12,31 @@ UTC = pytz.UTC
 
 # ── 50 STATE → DEFAULT CITY MAP ─────────────────────────────────────────────
 STATE_CITY_MAP = {
-    "alabama": ("Birmingham", "Alabama"),
-    "alaska": ("Anchorage", "Alaska"),
-    "arizona": ("Phoenix", "Arizona"),
-    "arkansas": ("Little Rock", "Arkansas"),
-    "california": ("Los Angeles", "California"),
-    "colorado": ("Denver", "Colorado"),
-    "connecticut": ("Hartford", "Connecticut"),
-    "delaware": ("Wilmington", "Delaware"),
     "florida": ("Miami", "Florida"),
-    "georgia": ("Atlanta", "Georgia"),
-    "hawaii": ("Honolulu", "Hawaii"),
-    "idaho": ("Boise", "Idaho"),
-    "illinois": ("Chicago", "Illinois"),
-    "indiana": ("Indianapolis", "Indiana"),
-    "iowa": ("Des Moines", "Iowa"),
-    "kansas": ("Wichita", "Kansas"),
-    "kentucky": ("Louisville", "Kentucky"),
-    "louisiana": ("New Orleans", "Louisiana"),
-    "maine": ("Portland", "Maine"),
-    "maryland": ("Baltimore", "Maryland"),
-    "massachusetts": ("Boston", "Massachusetts"),
-    "michigan": ("Detroit", "Michigan"),
-    "minnesota": ("Minneapolis", "Minnesota"),
-    "mississippi": ("Jackson", "Mississippi"),
-    "missouri": ("Kansas City", "Missouri"),
-    "montana": ("Billings", "Montana"),
-    "nebraska": ("Omaha", "Nebraska"),
-    "nevada": ("Las Vegas", "Nevada"),
-    "new hampshire": ("Manchester", "New Hampshire"),
-    "new jersey": ("Newark", "New Jersey"),
-    "new mexico": ("Albuquerque", "New Mexico"),
-    "new york": ("New York City", "New York"),
-    "north carolina": ("Charlotte", "North Carolina"),
-    "north dakota": ("Fargo", "North Dakota"),
-    "ohio": ("Columbus", "Ohio"),
-    "oklahoma": ("Oklahoma City", "Oklahoma"),
-    "oregon": ("Portland", "Oregon"),
-    "pennsylvania": ("Philadelphia", "Pennsylvania"),
-    "rhode island": ("Providence", "Rhode Island"),
-    "south carolina": ("Charleston", "South Carolina"),
-    "south dakota": ("Sioux Falls", "South Dakota"),
-    "tennessee": ("Nashville", "Tennessee"),
+    "california": ("Los Angeles", "California"),
     "texas": ("Houston", "Texas"),
-    "utah": ("Salt Lake City", "Utah"),
-    "vermont": ("Burlington", "Vermont"),
-    "virginia": ("Virginia Beach", "Virginia"),
+    "new york": ("New York City", "New York"),
+    "colorado": ("Denver", "Colorado"),
+    "illinois": ("Chicago", "Illinois"),
     "washington": ("Seattle", "Washington"),
-    "west virginia": ("Charleston", "West Virginia"),
-    "wisconsin": ("Milwaukee", "Wisconsin"),
-    "wyoming": ("Cheyenne", "Wyoming"),
+    "nevada": ("Las Vegas", "Nevada"),
+    "arizona": ("Phoenix", "Arizona"),
+    "georgia": ("Atlanta", "Georgia"),
+    "massachusetts": ("Boston", "Massachusetts"),
+    "pennsylvania": ("Philadelphia", "Pennsylvania"),
+    "ohio": ("Columbus", "Ohio"),
+    "north carolina": ("Charlotte", "North Carolina"),
+    "michigan": ("Detroit", "Michigan"),
+    "new jersey": ("Newark", "New Jersey"),
+    "virginia": ("Virginia Beach", "Virginia"),
+    "oregon": ("Portland", "Oregon"),
+    "utah": ("Salt Lake City", "Utah"),
 }
 
-# abbreviations
 STATE_ABBR = {
-    "ny":"new york","ca":"california","fl":"florida","tx":"texas","nj":"new jersey",
-    "pa":"pennsylvania","ga":"georgia","nc":"north carolina","sc":"south carolina",
-    "va":"virginia","ma":"massachusetts","oh":"ohio","mi":"michigan","wa":"washington",
-    "or":"oregon","az":"arizona","nv":"nevada","co":"colorado","ut":"utah","il":"illinois"
+    "fl":"florida","ca":"california","tx":"texas","ny":"new york",
+    "co":"colorado","il":"illinois","wa":"washington","nv":"nevada",
+    "az":"arizona","ga":"georgia","ma":"massachusetts","pa":"pennsylvania"
 }
 
 # ── PAGE CONFIG ─────────────────────────────────────────────────────────────
@@ -80,6 +47,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ── STYLE ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -94,7 +62,7 @@ html, body, [class*="css"] {
 
 st.info("🕒 All times are standardized to **Eastern Time (ET)**.")
 
-# ── MATPLOTLIB THEME ─────────────────────────────────────────────────────────
+# ── MATPLOTLIB ──────────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -116,34 +84,35 @@ CHART_SIZE = (13, 4)
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
-# ── SESSION DEFAULTS ─────────────────────────────────────────────────────────
 now_et = datetime.datetime.now(ET)
 
+# ── AUTO DEFAULTS ───────────────────────────────────────────────────────────
 if "date" not in st.session_state:
     st.session_state.date = now_et.date()
 
 if "time" not in st.session_state:
-    st.session_state.time = now_et.replace(minute=0, second=0, microsecond=0).time()
+    st.session_state.time = now_et.replace(minute=0, second=0).time()
 
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE (FIXED STATE LOGIC) ─────────────────────────────────────────────
+# ── GEOCODE (STATE SAFE + SMART FALLBACK) ───────────────────────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     raw = location_name.strip().lower()
 
-    # --- STATE DETECTION ---
+    # normalize state abbreviations
     if raw in STATE_ABBR:
         raw = STATE_ABBR[raw]
 
+    # STATE DETECTION → FORCE CITY
     if raw in STATE_CITY_MAP:
         city, state = STATE_CITY_MAP[raw]
         query = f"{city}, {state}, United States"
     elif len(raw.split()) == 1:
-        # treat single word as possible state OR city
+        # single word fallback
         if raw in STATE_CITY_MAP:
             city, state = STATE_CITY_MAP[raw]
             query = f"{city}, {state}, United States"
@@ -158,10 +127,9 @@ def geocode(location_name):
         timeout=8
     )
 
-    if r.status_code != 200:
-        return {"error": "API_LIMITED"}
+    data = r.json()
+    results = data.get("results", [])
 
-    results = r.json().get("results", [])
     if not results:
         return {"error": "NOT_FOUND"}
 
@@ -170,15 +138,15 @@ def geocode(location_name):
 
     state = p.get("admin1")
 
-    name_parts = [p["name"]]
+    name = [p["name"]]
     if state:
-        name_parts.append(state)
-    name_parts.append("United States")
+        name.append(state)
+    name.append("United States")
 
     return {
         "lat": p["latitude"],
         "lon": p["longitude"],
-        "name": ", ".join(name_parts),
+        "name": ", ".join(name),
     }
 
 # ── WEATHER ─────────────────────────────────────────────────────────────────
@@ -192,8 +160,7 @@ def fetch_weather(lat, lon):
         "&daily=temperature_2m_min,temperature_2m_max,precipitation_probability_max,wind_speed_10m_max"
     )
 
-    r = requests.get(url, timeout=10)
-    return r.json()
+    return requests.get(url).json()
 
 # ── OUTFIT LOGIC ────────────────────────────────────────────────────────────
 def outfit_for(temp_f, precip, wind):
@@ -218,7 +185,7 @@ with st.sidebar:
     location = st.text_input(
         "Location",
         value="New York City",
-        placeholder="Enter city or state"
+        placeholder="Enter city or state (e.g., Florida)"
     )
 
     if not location.strip():
@@ -255,7 +222,7 @@ if st.session_state.auto_run:
     go = True
 
 # ── MAIN ────────────────────────────────────────────────────────────────────
-st.title("Weather · Outfit Advisor (ET Standardized)")
+st.title("Weather · Outfit Advisor")
 
 if not go:
     st.stop()
@@ -263,7 +230,7 @@ if not go:
 geo = geocode(location)
 
 if "error" in geo:
-    st.error("❌ Location not found.")
+    st.error("Location not found")
     st.stop()
 
 lat, lon, city_name = geo["lat"], geo["lon"], geo["name"]
@@ -297,5 +264,68 @@ st.metric("Location", city_name)
 st.metric("Temp", f"{tf}°F")
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
+
+# ── 7 DAY ───────────────────────────────────────────────────────────────────
+if show_7day:
+    st.markdown("### 7-Day Forecast")
+
+    dmin = [to_f(x) for x in daily["temperature_2m_min"]]
+    dmax = [to_f(x) for x in daily["temperature_2m_max"]]
+
+    days = [
+        datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
+        for d in daily["time"]
+    ]
+
+    fig, ax = plt.subplots(figsize=CHART_SIZE)
+
+    ax.plot(days, dmin, label="Min Temp", color=ACCENT1)
+    ax.plot(days, dmax, label="Max Temp", color=ACCENT2)
+    ax.fill_between(days, dmin, dmax, alpha=0.2)
+
+    ax.set_title(city_name)
+    ax.legend()
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+# ── 24 HOUR ─────────────────────────────────────────────────────────────────
+if show_24h:
+    st.markdown("### Next 24 Hours")
+
+    now = datetime.datetime.now(ET)
+
+    ft, fp, fw, ftmp = [], [], [], []
+
+    for i, t in enumerate(times):
+        if t < now:
+            continue
+        if len(ft) >= forecast_hrs:
+            break
+
+        ft.append(t.strftime("%-I %p"))
+        fp.append(prec[i])
+        fw.append(wind[i])
+        ftmp.append(temps[i])
+
+    fmin = [min(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
+    fmax = [max(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
+
+    fig2, ax = plt.subplots(figsize=CHART_SIZE)
+
+    ax.plot(ft, fmin, label="Min Temp", color=ACCENT1)
+    ax.plot(ft, fmax, label="Max Temp", color=ACCENT2)
+    ax.fill_between(ft, fmin, fmax, alpha=0.2)
+
+    ax.plot(ft, fw, label="Wind", color=ACCENT3, linestyle="--")
+
+    ax2 = ax.twinx()
+    ax2.bar(ft, fp, alpha=0.3, color=ACCENT1)
+
+    ax.legend()
+    ax2.legend(["Rain %"], loc="upper right")
+
+    st.pyplot(fig2)
+    plt.close(fig2)
 
 st.success("Done ✔")
