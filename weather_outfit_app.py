@@ -10,6 +10,24 @@ import matplotlib.patches as mpatches
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
+# ── STATE → DEFAULT CITY MAP (RESTORED FLORIDA = MIAMI) ────────────────────
+STATE_TO_CITY = {
+    "florida": "Miami",
+    "fl": "Miami",
+    "new york": "New York City",
+    "ny": "New York City",
+    "california": "Los Angeles",
+    "ca": "Los Angeles",
+    "texas": "Houston",
+    "tx": "Houston",
+    "colorado": "Denver",
+    "co": "Denver",
+    "illinois": "Chicago",
+    "il": "Chicago",
+    "washington": "Seattle",
+    "wa": "Seattle",
+}
+
 # ── PAGE CONFIG ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="What Should I Wear?",
@@ -51,7 +69,7 @@ matplotlib.rcParams.update({
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 4)
 
-# ── HELPERS ──────────────────────────────────────────────────────────────────
+# ── HELPERS ─────────────────────────────────────────────────────────────────
 def to_f(c): return round(c * 9/5 + 32, 1)
 def to_mph(k): return round(k * 0.621371, 1)
 
@@ -67,14 +85,21 @@ if "time" not in st.session_state:
 if "auto_run" not in st.session_state:
     st.session_state.auto_run = True
 
-# ── GEOCODE ──────────────────────────────────────────────────────────────────
+# ── GEOCODE (STATE FIX + FLORIDA → MIAMI LOGIC RESTORED) ───────────────────
 @st.cache_data(show_spinner=False)
 def geocode(location_name):
+
+    raw = location_name.strip().lower()
+
+    # if user typed state → convert to default city
+    if raw in STATE_TO_CITY:
+        location_name = STATE_TO_CITY[raw]
+
     url = "https://geocoding-api.open-meteo.com/v1/search"
 
     r = requests.get(
         url,
-        params={"name": location_name, "count": 10, "language": "en"},
+        params={"name": f"{location_name}, United States", "count": 10},
         timeout=8
     )
 
@@ -82,9 +107,11 @@ def geocode(location_name):
         return {"error": "API_LIMITED"}
 
     results = r.json().get("results", [])
+
     if not results:
         return {"error": "NOT_FOUND"}
 
+    # prefer US result
     us = [r for r in results if r.get("country") == "United States"]
     p = us[0] if us else results[0]
 
@@ -101,7 +128,7 @@ def geocode(location_name):
         "name": ", ".join(name_parts),
     }
 
-# ── WEATHER ──────────────────────────────────────────────────────────────────
+# ── WEATHER ─────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon):
     url = (
@@ -134,11 +161,15 @@ def outfit_for(temp_f, precip, wind):
         return "👕", "T-Shirt Weather", "Warm day"
     return "😎", "Summer Vibes", "Hot and sunny"
 
-# ── SIDEBAR ──────────────────────────────────────────────────────────────────
+# ── SIDEBAR ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
-    location = st.text_input("Location", value="New York City", placeholder="Enter city or state")
+    location = st.text_input(
+        "Location",
+        value="New York City",
+        placeholder="Enter city or state"
+    )
 
     if not location.strip():
         location = "New York City"
@@ -194,7 +225,6 @@ if "error" in data:
     st.stop()
 
 hourly = data["hourly"]
-daily = data["daily"]
 
 times = [
     datetime.datetime.fromisoformat(t).replace(tzinfo=UTC).astimezone(ET)
@@ -209,7 +239,7 @@ target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
 idx = min(range(len(times)), key=lambda i: abs((times[i] - target).total_seconds()))
 
-# ── ⭐ FIX: FUTURE DATE RANGE LOGIC ─────────────────────────────────────────
+# ── FUTURE DATE LOGIC (MIN/MAX RANGE) ───────────────────────────────────────
 is_future = date > now_et.date()
 
 if not is_future:
@@ -218,15 +248,14 @@ if not is_future:
     wd = wind[idx]
     temp_label = f"{tf}°F"
 else:
-    # use DAILY min/max instead of single point
-    day_idx = min((date - now_et.date()).days, len(daily["temperature_2m_min"]) - 1)
+    day_idx = min((date - now_et.date()).days, len(data["daily"]["temperature_2m_min"]) - 1)
 
-    tmin = to_f(daily["temperature_2m_min"][day_idx])
-    tmax = to_f(daily["temperature_2m_max"][day_idx])
+    tmin = to_f(data["daily"]["temperature_2m_min"][day_idx])
+    tmax = to_f(data["daily"]["temperature_2m_max"][day_idx])
 
     tf = (tmin + tmax) / 2
-    pr = daily["precipitation_probability_max"][day_idx]
-    wd = to_mph(daily["wind_speed_10m_max"][day_idx])
+    pr = data["daily"]["precipitation_probability_max"][day_idx]
+    wd = to_mph(data["daily"]["wind_speed_10m_max"][day_idx])
 
     temp_label = f"{tmin}°F – {tmax}°F"
 
@@ -240,18 +269,18 @@ st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── 7-DAY CHART (UNCHANGED STYLE) ───────────────────────────────────────────
+# ── CHARTS (UNCHANGED FEATURES) ─────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
-    dmin = [to_f(x) for x in daily["temperature_2m_min"]]
-    dmax = [to_f(x) for x in daily["temperature_2m_max"]]
-    rain = daily["precipitation_probability_max"]
-    wind_d = [to_mph(x) for x in daily["wind_speed_10m_max"]]
+    dmin = [to_f(x) for x in data["daily"]["temperature_2m_min"]]
+    dmax = [to_f(x) for x in data["daily"]["temperature_2m_max"]]
+    rain = data["daily"]["precipitation_probability_max"]
+    wind_d = [to_mph(x) for x in data["daily"]["wind_speed_10m_max"]]
 
     days = [
         datetime.datetime.strptime(d, "%Y-%m-%d").strftime("%a\n%b %d")
-        for d in daily["time"]
+        for d in data["daily"]["time"]
     ]
 
     fig, ax1 = plt.subplots(figsize=CHART_SIZE)
@@ -271,7 +300,6 @@ if show_7day:
     st.pyplot(fig)
     plt.close(fig)
 
-# ── 24-HOUR CHART (UNCHANGED STYLE) ────────────────────────────────────────
 if show_24h:
     st.markdown("### Next 24 Hours")
 
