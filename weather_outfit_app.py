@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.patches as mpatches
 
-# ── TIMEZONE ────────────────────────────────────────────────────────────────
+# ── TIMEZONE ───────────────────────────────────────────────────────────────
 ET = pytz.timezone("America/New_York")
 UTC = pytz.UTC
 
@@ -28,7 +28,7 @@ STATE_TO_CITY = {
     "wa": "Seattle",
 }
 
-# ── PAGE CONFIG ─────────────────────────────────────────────────────────────
+# ── PAGE CONFIG ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="What Should I Wear?",
     page_icon="🌤️",
@@ -36,7 +36,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── STYLE ───────────────────────────────────────────────────────────────────
+# ── STYLE ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
 html, body, [class*="css"] {
@@ -51,7 +51,7 @@ html, body, [class*="css"] {
 
 st.info("🕒 All times are standardized to **Eastern Time (ET)**.")
 
-# ── MATPLOTLIB THEME ─────────────────────────────────────────────────────────
+# ── MATPLOTLIB THEME ────────────────────────────────────────────────────────
 matplotlib.rcParams.update({
     "figure.facecolor": "#1a1a2e",
     "axes.facecolor": "#1a1a2e",
@@ -69,11 +69,14 @@ matplotlib.rcParams.update({
 ACCENT1, ACCENT2, ACCENT3 = "#667eea", "#f093fb", "#43e97b"
 CHART_SIZE = (13, 4)
 
-# ── HELPERS ─────────────────────────────────────────────────────────────────
-def to_f(c): return round(c * 9/5 + 32, 1)
-def to_mph(k): return round(k * 0.621371, 1)
+# ── HELPERS ──────────────────────────────────────────────────────────────────
+def to_f(c):
+    return round(c * 9/5 + 32, 1)
 
-# ── SESSION DEFAULTS ─────────────────────────────────────────────────────────
+def to_mph(k):
+    return round(k * 0.621371, 1)
+
+# ── SESSION DEFAULTS ────────────────────────────────────────────────────────
 now_et = datetime.datetime.now(ET)
 
 if "date" not in st.session_state:
@@ -128,7 +131,7 @@ def geocode(location_name):
         "name": ", ".join(name_parts),
     }
 
-# ── WEATHER ─────────────────────────────────────────────────────────────────
+# ── WEATHER ──────────────────────────────────────────────────────────────────
 @st.cache_data(show_spinner=False)
 def fetch_weather(lat, lon):
     url = (
@@ -161,7 +164,7 @@ def outfit_for(temp_f, precip, wind):
         return "👕", "T-Shirt Weather", "Warm day"
     return "😎", "Summer Vibes", "Hot and sunny"
 
-# ── SIDEBAR ─────────────────────────────────────────────────────────────────
+# ── SIDEBAR ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🌤️ Outfit Planner")
 
@@ -170,9 +173,6 @@ with st.sidebar:
         value="New York City",
         placeholder="Enter city or state"
     )
-
-    if not location.strip():
-        location = "New York City"
 
     if st.button("⚡ Use NOW (ET)"):
         st.session_state.date = now_et.date()
@@ -232,19 +232,19 @@ times = [
 ]
 
 temps = [to_f(v) for v in hourly["temperature_2m"]]
-prec = hourly["precipitation_probability"]
+precip = hourly["precipitation_probability"]
 wind = [to_mph(w) for w in hourly["wind_speed_10m"]]
 
 target = datetime.datetime.combine(date, time_obj).replace(tzinfo=ET)
 
 idx = min(range(len(times)), key=lambda i: abs((times[i] - target).total_seconds()))
 
-# ── FUTURE DATE LOGIC (MIN/MAX RANGE) ───────────────────────────────────────
+# ── FUTURE DATE LOGIC (MIN/MAX RANGE) ────────────────────────────────────────
 is_future = date > now_et.date()
 
 if not is_future:
     tf = temps[idx]
-    pr = prec[idx]
+    pr = precip[idx]
     wd = wind[idx]
     temp_label = f"{tf}°F"
 else:
@@ -269,7 +269,7 @@ st.metric("Temp", temp_label)
 st.metric("Rain", f"{pr}%")
 st.metric("Wind", f"{wd} mph")
 
-# ── CHARTS (UNCHANGED FEATURES) ─────────────────────────────────────────────
+# ── CHARTS (UNCHANGED FEATURES) ──────────────────────────────────────────────
 if show_7day:
     st.markdown("### 7-Day Forecast")
 
@@ -314,12 +314,12 @@ if show_24h:
             break
 
         ft.append(t.strftime("%-I %p"))
-        fp.append(prec[i])
+        fp.append(precip[i])
         fw.append(wind[i])
         ftmp.append(temps[i])
 
-    fmin = [min(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
-    fmax = [max(ftmp[max(0,i-2):i+1]) for i in range(len(ftmp))]
+    fmin = [min(ftmp[max(0, i-2):i+1]) for i in range(len(ftmp))]
+    fmax = [max(ftmp[max(0, i-2):i+1]) for i in range(len(ftmp))]
 
     fig2, ax = plt.subplots(figsize=CHART_SIZE)
 
